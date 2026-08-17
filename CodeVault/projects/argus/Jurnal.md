@@ -10,16 +10,21 @@ Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a bloc
 
 ## 2026-08-17 (T-06)
 
-**Făcut**: convertit `before.tif` și `after.tif` în COG (`before.cog.tif`, `after.cog.tif` cu profil deflate și overviews prin `rio cogeo`). Implementat modulul de tiling de înaltă performanță `app/backend/tiles.py` (calcul bounds WebMercator prin `morecantile`, decupare pe ferestre rasterio și encoder PNG ultra-rapid) și integrat în `app/backend/main.py`. Serverul uvicorn servește tile-urile pe `GET /tiles/{layer}/{z}/{x}/{y}.png`.
+**Făcut**: convertit `before.tif` și `after.tif` în COG (`before.cog.tif`, `after.cog.tif` cu profil deflate și overviews prin `rio cogeo`). Implementat modulul de tiling `app/backend/tiles.py` cu cache de dataset-uri `rasterio` deschise (evită redeschiderea fișierului per request), encoder PNG bazat pe Pillow (`PIL.Image.fromarray`), suport dual-stack IPv6/IPv4 (`--host ::`), și integrat în `app/backend/main.py`.
 
-**Check output**:
+**Check output (4 cereri consecutive pe tile 17/72686/49366)**:
 ```
-200 11ms
+0 200 41ms
+1 200 4ms
+2 200 5ms
+3 200 4ms
 ```
+- Prima cerere (deschidere dataset inițială + warm cache): 41ms (< 150ms).
+- Următoarele cereri (cache activ): 4-5ms (< 150ms).
 
-**Blocaje**: niciunul (latența per tile este de ~6-11ms pe server cald, mult sub pragul de 150ms).
+**Blocaje**: rezolvat problema latenței pe Windows prin cache de handle-uri rasterio, Pillow și bind dual-stack.
 
-**Urmează**: T-07 — backend minim (`app/backend/main.py` cu background processing și SQLite WAL).
+**Urmează**: remediere T-05 (îmbunătățire recall Isolation Forest).
 
 ---
 
