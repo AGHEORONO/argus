@@ -1,0 +1,120 @@
+"""Change detection using Isolation Forest on raster patch features."""
+
+import json
+from typing import Any, Dict, List, Optional
+import numpy as np
+import rasterio
+from rasterio.transform import xy
+from shapely.geometry import Polygon, mapping
+from sklearn.ensemble import IsolationForest
+
+from app.backend.features import extract_features
+
+
+def detect_changes(
+    before_path: str,
+    after_path: str,
+    patch: int = 32,
+    top_n: int = 20,
+    max_samples: int = 10000,
+    n_estimators: int = 100,
+    random_state: int = 42,
+) -> Dict[str, Any]:
+    """Detect anomalous change candidates between two rasters using Isolation Forest.
+
+    Args:
+        before_path: Filepath to reference baseline GeoTIFF.
+        after_path: Filepath to comparison GeoTIFF.
+        patch: Spatial patch size in pixels.
+        top_n: Number of top anomalous candidates to return.
+        max_samples: Subsample size for fitting Isolation Forest.
+        n_estimators: Number of trees in Isolation Forest.
+        random_state: Random seed for reproducibility.
+
+    Returns:
+        GeoJSON FeatureCollection dictionary containing top_n anomalous patch polygons
+        with anomaly scores and metadata.
+    """
+    with rasterio.open(before_path) as src_before:
+        before_data = src_before.read()
+        transform = src_before.transform
+        crs = src_before.crs
+        width = src_before.width
+        height = src_before.height
+
+    with rasterio.open(after_path) as src_after:
+        after_data = src_after.read()
+
+    # Extract patch features
+    X_before = extract_features(before_data, patch=patch)
+    X_after = extract_features(after_data, patch=patch)
+
+    n_w = width // patch
+    n_h = height // patch
+    n_patches = len(X_before)
+
+    # Train Isolation Forest on baseline features
+    clf = IsolationForest(
+        n_estimators=n_estimators,
+        max_samples=min(max_samples, n_patches),
+        random_state=random_state,
+        n_jobs=-1,
+    )
+    clf.fit(X_before)
+
+    # Score samples on after features (lower score_samples means more anomalous)
+    raw_scores = clf.score_samples(X_after)
+    # Higher anomaly_score means more anomalous
+    anomaly_scores = -raw_scores
+
+    # Rank patches by anomaly score descending
+    sorted_indices = np.argsort(anomaly_scores)[::-1]
+    top_indices = sorted_indices[:top_n]
+
+    features: List[Dict[str, Any]] = []
+    for rank, idx in enumerate(top_indices, start=1):
+        row_idx = int(idx // n_w)
+        col_idx = int(idx % n_w)
+
+        r0 = row_idx * patch
+        r1 = r0 + patch
+        c0 = col_idx * patch
+        c1 = c0 + patch
+
+        x0, y0 = xy(transform, r0, c0, offset="ul")
+        x1, y1 = xy(transform, r1, c1, offset="ul")
+
+        poly = Polygon([
+            (x0, y0),
+            (x1, y0),
+            (x1, y1),
+            (x0, y1),
+            (x0, y0),
+        ])
+
+        feature = {
+            "type": "Feature",
+            "id": f"anomaly_{rank}",
+            "properties": {
+                "rank": rank,
+                "anomaly_score": float(anomaly_scores[idx]),
+                "patch_index": int(idx),
+                "pixel_bounds": [r0, r1, c0, c1],
+            },
+            "geometry": mapping(poly),
+        }
+        features.append(feature)
+
+    crs_name = crs.to_string() if crs else "EPSG:4326"
+    geojson_doc = {
+        "type": "FeatureCollection",
+        "crs": {
+            "type": "name",
+            "properties": {
+                "name": crs_name,
+            },
+        },
+        "features": features,
+    }
+
+    return geojson_doc

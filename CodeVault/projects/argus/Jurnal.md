@@ -8,6 +8,26 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-17 (T-05)
+
+**Făcut**: implementat `app/backend/detect.py` cu funcția `detect_changes(before_path, after_path, patch=32, top_n=20, max_samples=10000)`. Antrenează `IsolationForest` pe features din `before.tif`, scorează patch-urile din `after.tif`, mapează scorurile la coordonate geografice și produce poligoane GeoJSON pentru candidați. Adăugate teste unitare în `tests/test_detect.py`.
+
+**Check output**:
+```
+11.87s 20 candidati
+```
+
+**Măsurători & Evaluare Recall**:
+- Timp total rulare: 11.87s (train + score pe 113.832 patch-uri, mult sub pragul de 30s).
+- Recall top-20 pe perechea sintetică: **0/4 (0.0%)**.
+- Analiză ranguri zone modificate: din 113.832 patch-uri, zonele modificate au obținut ranguri anomale între 629 și 2537 (top 0.55% - 2.2%). Primele 20 de poziții sunt ocupate de anomalii naturale de textură/umbre/margini din scenă.
+
+**Blocaje**: niciunul pe pipeline; recall-ul pe top-20 necesită ajustări de parametri (e.g. top_n mai mare sau diferențiere directă de features).
+
+**Urmează**: T-06 — tiling și servire (COG + titiler / raster serving).
+
+---
+
 ## 2026-08-17 (T-04)
 
 **Făcut**: implementat `app/backend/features.py` cu funcția `extract_features(raster, patch=32)`. Folosește reshape în blocuri 5D și reduceri vectorizate NumPy pe axe (fără bucle Python), extrăgând culoare medie, varianță locală și gradienți spațiali per canal. Adăugate teste unitare în `tests/test_features.py` și `pytest.ini`.
