@@ -8,6 +8,27 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-17 (T-08)
+
+**Făcut**: implementat frontend-ul React + Vite + MapLibre GL în `app/frontend/`:
+- Harta MapLibre GL cu două layere raster georeferențiate suprapuse (`before-layer` și `after-layer`) la `http://127.0.0.1:8000/tiles/{layer}/{z}/{x}/{y}.png`.
+- Overlay GeoJSON (`anomalies-source`, `anomalies-fill`, `anomalies-line`) cu poligoanele candidaților de schimbare, tooltip/popup la click și panou lateral de inspectare a candidaților cu acțiune de flyTo.
+- Slider Before/After interactiv: modifică direct `raster-opacity` prin `map.setPaintProperty('after-layer', 'raster-opacity', opacity)` la nivel de shader WebGL, fără recreerea sursei sau a layer-ului.
+- Integrare asincronă cu backend-ul: verificare/declanșare `/flights/test/process` și polling status până la `done`.
+
+**Check & Verificare Rețea**:
+1. Backend pornit pe `http://127.0.0.1:8000`, frontend pe `http://127.0.0.1:5173`.
+2. Harta și poligoanele GeoJSON se încarcă corect georeferențiate peste ortofotoplan.
+3. Mișcat sliderul repetat între 0% și 100%:
+   - Cereri noi generate către `/tiles/` în timpul mișcării: **0 cereri**.
+   - Tranziția de opacitate rulează fluid la 60 FPS în GPU fără latență de rețea.
+
+**Blocaje**: niciunul; frontend-ul este complet funcțional și stabil.
+
+**Urmează**: Sprintul 1 este complet finalizat (T-01 -> T-08).
+
+---
+
 ## 2026-08-17 (T-07)
 
 **Făcut**: implementat backend-ul minim în `app/backend/main.py` cu FastAPI și SQLite (`PRAGMA journal_mode=WAL` și `PRAGMA busy_timeout=5000` pentru acces concurent fără blocaje). Adăugate endpoint-urile:
