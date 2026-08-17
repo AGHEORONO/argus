@@ -20,6 +20,7 @@ Planificare. Zero cod, zero date de zbor, hardware de procesare încă necunoscu
 
 ## Navigare
 
+- [[Task-uri de start]] — T-01…T-08, de aici se lucrează zilnic
 - [[Plan de implementare]] — cele 7 faze, ordinea reală de execuție, MVP vs. stretch
 - [[Intrebari deschise]] — necunoscutele și ce fază blochează fiecare
 - [[Decizii]] — deciziile luate, cu motivul
