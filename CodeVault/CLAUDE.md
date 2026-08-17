@@ -1,4 +1,4 @@
-# AGENTS.md / CLAUDE.md — Practica & Obsidian Vault Workspace
+﻿# AGENTS.md / CLAUDE.md — Practica & Obsidian Vault Workspace
 
 ## Project Context
 - **Workspace**: `Practica`
@@ -37,6 +37,18 @@ If running on a **new device / machine** where skills are not yet installed, exe
 - **Repository**: `https://github.com/dietrichgebert/ponytail`
 - **Targets**: `~/.claude/skills/ponytail*`, `~/.agents/skills/ponytail*`, `~/.agents/rules/ponytail.md`
 - **Bundled Skills**: `ponytail`, `ponytail-review`, `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help`
+
+---
+
+## Delegation to Gemini (agy / Antigravity CLI)
+
+Scope: **this project only**, both machines (desktop now, laptop in Timișoara later). Opening Claude Code anywhere else, or opening Antigravity IDE directly, is unaffected — nothing here changes their defaults, only how Claude behaves inside this folder.
+
+- **Execution** — implementation-heavy work (writing/editing code, boilerplate, refactors) goes to `agy` instead of Claude implementing it directly: `agy --print "<prompt>" --model gemini-3.7-flash-high --add-dir "<smallest folder needed>" --dangerously-skip-permissions`. This burns Gemini's quota, not Claude's.
+- **Git stays with Claude.** `agy` never runs `git commit` or `git push` itself, even under `--dangerously-skip-permissions` — that flag covers file edits only. Claude reviews what `agy` produced, then commits/pushes after the user confirms. (This rule exists because on 2026-08-17 `agy`, left fully unsupervised, auto-committed and pushed ~500 unrelated lines to `origin/main` on its own initiative — see [[Jurnal]].)
+- **Fallback to normal mode** — when `agy`/Gemini fails, times out, produces wrong or incomplete output, or the task is architecturally sensitive / beyond a fast-cheap model (multi-file reasoning, security-relevant code, anything the recovery-first gate would escalate): stop delegating, say so plainly, and have Claude implement it directly instead. One retry with reduced scope is fine before falling back; don't loop.
+- Claude's role either way: plan, write the prompt (or the code), review the result, report back — never silently redo what `agy` already did correctly.
+- Use `-c`/`--continue` or `--conversation <id>` to keep one `agy` session across related sub-tasks instead of restarting each call.
 
 ---
 
