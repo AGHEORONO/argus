@@ -8,6 +8,21 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-17 (T-01)
+
+**Făcut**: creat mediul Python (`.venv`), instalat dependențele de bază (`numpy`, `rasterio`, `scikit-learn`, `shapely`, `fastapi`, `uvicorn`, `rio-cogeo`, `pytest`), generat `app/requirements.txt` cu versiuni fixate, creat structura de foldere `app/backend/` cu `__init__.py` și `app/frontend/`.
+
+**Check output**:
+```
+imports OK
+```
+
+**Blocaje**: niciunul.
+
+**Urmează**: T-02 — descărcat ortofotoplan public de test în `data/reference/before.tif`.
+
+---
+
 ## 2026-08-17 (3)
 
 **Făcut**: adăugată regula de delegare către `agy`/Gemini în `CLAUDE.md`/`AGENTS.md` (rădăcină + copiile din `CodeVault`): execuție pe Gemini (`gemini-3.7-flash-high`), fallback la Claude direct când Gemini nu face față, scop limitat strict la acest proiect (nu afectează Claude Code în general și nu afectează Antigravity IDE deschis direct).
