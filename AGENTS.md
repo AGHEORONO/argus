@@ -40,19 +40,6 @@ If running on a **new device / machine** where skills are not yet installed, exe
 
 ---
 
-## Delegation to Gemini (agy / Antigravity CLI)
-
-For implementation-heavy work in this workspace (writing/editing code, boilerplate, refactors), delegate execution to the `agy` CLI (Antigravity, Gemini-backed) instead of doing it directly — this moves the token cost off Claude's budget onto Gemini's.
-
-- Command shape: `agy --print "<prompt>" --model gemini-3.7-flash-high --add-dir "<smallest folder needed>" --dangerously-skip-permissions`
-- Default model: `gemini-3.7-flash-high`.
-- Runs with `--dangerously-skip-permissions` (auto-approves all of agy's own tool actions) — by user choice. Always scope `--add-dir` to the smallest folder the task needs (e.g. a subfolder of `Practica`, never the whole drive).
-- Claude's role: plan the task, write the prompt, hand off to `agy`, then read its output/diff and report back. Don't re-implement what `agy` already did.
-- Use `-c`/`--continue` or `--conversation <id>` to keep one agy session across related sub-tasks instead of starting fresh each call.
-- Still escalate to the user instead of delegating for anything touching secrets, credentials, or destructive git operations — same recovery-first rule as above applies to agy-delegated work too.
-
----
-
 ## Auto-Setup Instructions for New Machine
 To automatically install or update all dependencies and skills on any device:
 - **Windows (PowerShell)**: `.\setup-skills.ps1`

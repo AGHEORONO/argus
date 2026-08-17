@@ -8,16 +8,6 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
-## 2026-08-17 (2)
-
-**Făcut**: pregătit proiectul pentru execuție delegată și pentru perspectivă comercială. Scris [[Task-uri de start]] (T-01…T-08, fiecare cu check rulabil), [[Reguli pentru agent executant]], [[Performanta]], [[Caiet de practica]]. Adăugat `check.py` la rădăcină. Decizii noi: D-008…D-011. Întrebare nouă: Î-05 (licența AGPL a ODM).
-
-**Blocaje**: niciunul.
-
-**Urmează**: T-01. Un task pe rând, output de check lipit aici la fiecare.
-
----
-
 ## 2026-08-17
 
 **Făcut**: setat repo-ul și vault-ul. Stabilit numele, structura, stack-ul, ordinea de execuție. Scris [[Plan de implementare]], [[Decizii]], [[Intrebari deschise]].

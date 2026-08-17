@@ -43,23 +43,3 @@ Plugin Obsidian Git pentru note (auto-commit + auto-pull), git din CLI pentru co
 
 `BackgroundTasks` din FastAPI și SQLite.
 **De ce**: la volumul unui proiect de practică sunt servicii în plus de întreținut pentru zero câștig. Se adaugă doar când apare o nevoie măsurată — joburi paralele reale sau query-uri spațiale pe care SQLite nu le poate face.
-
-## D-008 — COG în loc de pre-tiling (2026-08-17)
-
-Rasterele se stochează ca Cloud Optimized GeoTIFF și se servesc prin range request, nu se taie în tile-uri pre-generate.
-**De ce**: elimină un pas de procesare de minute după fiecare zbor și mii de fișiere de gestionat. Decizie luată acum pentru că e ieftină la început și scumpă după ce construiești peste ea. Detalii în [[Performanta]].
-
-## D-009 — Evaluare pe adevăr sintetic, de la început (2026-08-17)
-
-Perechea before/after cu schimbări injectate (T-03) se construiește **înainte** de algoritmul de detecție.
-**De ce**: fără adevăr cunoscut, „funcționează" e o părere. Cu el, ai o cifră. Cifra e și ce vinde proiectul la concurs — vezi [[Caiet de practica]] — și singura protecție reală când execuția e delegată unui model ieftin.
-
-## D-010 — Verificare mecanică, nu de încredere (2026-08-17)
-
-Un singur `check.py` la rădăcină, rulat după fiecare task; niciun task nu se închide fără output lipit în [[Jurnal]].
-**De ce**: execuția e delegată către modele rapide și ieftine (Sonnet, Gemini Flash), cu verificare finală de către Opus. Fiabilitatea nu vine din instrucțiuni mai bune, ci din checkuri care pică zgomotos. Vezi [[Reguli pentru agent executant]].
-
-## D-011 — Perspectiva comercială schimbă tratamentul licențelor (2026-08-17)
-
-Orice dependință se alege ținând cont că produsul ar putea fi vândut. Licențele copyleft se semnalează, nu se ignoră.
-**Consecință imediată**: ODM e AGPL-3.0, deci faza 2 devine și un risc juridic, nu doar unul de hardware. Deschis ca Î-05 în [[Intrebari deschise]]. Nu blochează nimic acum — faza 2 e oricum ultima.
