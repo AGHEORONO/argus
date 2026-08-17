@@ -8,6 +8,26 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-17 (T-07)
+
+**Făcut**: implementat backend-ul minim în `app/backend/main.py` cu FastAPI și SQLite (`PRAGMA journal_mode=WAL` și `PRAGMA busy_timeout=5000` pentru acces concurent fără blocaje). Adăugate endpoint-urile:
+- `POST /flights`: creare/încărcare pereche ortofotoplanuri dronă în `data/flights/{id}/`.
+- `POST /flights/{id}/process`: declanșare job asincron de detecție prin `BackgroundTasks`.
+- `GET /flights/{id}/status`: interogare non-blocantă a stării jobului (`pending`, `running`, `done`, `failed`). Latență medie interogare în timpul procesării: ~6ms.
+- `GET /flights/{id}/result`: returnare GeoJSON FeatureCollection cu candidații detectați odată finalizat jobul (status 200) sau status 202 în timpul procesării.
+- Adăugate teste de integrare în `tests/test_main.py` (total suită: 9 teste trecute).
+
+**Check output**:
+```
+{'id': 'test', 'status': 'done', 'error_message': None, 'updated_at': '2026-08-17 01:21:29'}
+```
+
+**Blocaje**: niciunul; jobul a atins status `done` în ~15s, iar `GET /flights/{id}/result` returnează GeoJSON valid cu 20 de poligoane.
+
+**Urmează**: T-08 — frontend cu slider before/after (React/Vite + MapLibre GL).
+
+---
+
 ## 2026-08-17 (T-06)
 
 **Făcut**: convertit `before.tif` și `after.tif` în COG (`before.cog.tif`, `after.cog.tif` cu profil deflate și overviews prin `rio cogeo`). Implementat modulul de tiling `app/backend/tiles.py` cu cache de dataset-uri `rasterio` deschise (evită redeschiderea fișierului per request), encoder PNG bazat pe Pillow (`PIL.Image.fromarray`), suport dual-stack IPv6/IPv4 (`--host ::`), și integrat în `app/backend/main.py`.
