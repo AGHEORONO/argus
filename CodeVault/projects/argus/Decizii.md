@@ -43,3 +43,10 @@ Plugin Obsidian Git pentru note (auto-commit + auto-pull), git din CLI pentru co
 
 `BackgroundTasks` din FastAPI și SQLite.
 **De ce**: la volumul unui proiect de practică sunt servicii în plus de întreținut pentru zero câștig. Se adaugă doar când apare o nevoie măsurată — joburi paralele reale sau query-uri spațiale pe care SQLite nu le poate face.
+
+## D-008 — Seed automat demo pe disc efemer (Render) (2026-08-17)
+
+La pornirea backend-ului în `lifespan`, se verifică și se seedează automat datele de referință (`before.cog.tif`, `after.cog.tif`) și zborul `test` cu detecția pre-calculată.
+**De ce**: Render (tier gratuit) șterge discul efemer la fiecare restart/redeploy după inactivitate. Pentru demo public, utilizatorul trebuie să poată deschide linkul și să vadă imediat harta și anomaliile fără să fie nevoie de re-upload manual.
+**Consecință / Notă de producție**: la trecerea la date reale de producție este obligatoriu storage persistent extern (AWS S3 / Cloudflare R2 pentru rastere și PostgreSQL / PostGIS gestionat pentru metadata).
+

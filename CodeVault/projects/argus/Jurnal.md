@@ -8,6 +8,27 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-17 (Faza 7 — Deployment)
+
+**Făcut**: pregătit și configurat deployment-ul public pentru backend (Render) și frontend (Vercel):
+- *Frontend URL dynamic*: mutat `API_BASE` pe `import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'` în `app/frontend/src/App.jsx` și creat `app/frontend/.env.example`.
+- *Render Backend & Ephemeral Disk Self-Healing*: creat `app/backend/provision.py` integrat în `lifespan` din `app/backend/main.py`. La fiecare pornire/redeploy pe disc efemer, backend-ul descarcă automat `before.tif` de pe OAM S3 dacă lipsește, generează `after.tif` și `truth.geojson`, construiește COG-urile optimizate și populează zborul demonstrativ `test` cu detecția gata rulată.
+- *Decizii arhitectură*: adăugat `D-008` în `CodeVault/projects/argus/Decizii.md` pentru justificarea seed-ului automat pe medii efemere.
+- *Fișiere de deployment*:
+  - `Dockerfile` (Python 3.11-slim + GDAL/libgdal + uvicorn pe `$PORT`).
+  - `render.yaml` (Render Blueprint Web Service pe regiunea Frankfurt).
+  - `vercel.json` și `app/frontend/vercel.json` (Vite framework rewrites și build orchestration).
+- *Instrucțiuni de conectare*:
+  1. Backend Render: creat Web Service din repo-ul GitHub `AGHEORONO/argus` utilizând `Dockerfile` / `render.yaml`. URL rezultat: `https://argus-backend.onrender.com`.
+  2. Frontend Vercel: importat repo-ul `AGHEORONO/argus` pe Vercel, setat Root Directory `app/frontend` (sau root cu `vercel.json`), setat Environment Variable `VITE_API_BASE=https://argus-backend.onrender.com`.
+  3. Comportament cold-start: Render free tier adoarme după 15 minute de inactivitate. La prima accesare trezirea durează ~30–50s, după care servirea tile-urilor (4–5ms) și interogarea rezultatelor rulează instant.
+
+**Blocaje**: niciunul; suita de teste (9/9) și build-ul de producție Vite trec fără erori.
+
+**Urmează**: Faza 1 (Ingestie și validare) sau Faza 2 (ODM).
+
+---
+
 ## 2026-08-17 (T-08)
 
 **Făcut**: implementat frontend-ul React + Vite + MapLibre GL în `app/frontend/`:

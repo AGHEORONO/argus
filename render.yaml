@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: argus-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: frankfurt
+    envVars:
+      - key: PORT
+        value: 8000
