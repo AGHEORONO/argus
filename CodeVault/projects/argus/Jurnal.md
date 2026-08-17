@@ -8,6 +8,21 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-17 (T-06)
+
+**Făcut**: convertit `before.tif` și `after.tif` în COG (`before.cog.tif`, `after.cog.tif` cu profil deflate și overviews prin `rio cogeo`). Implementat modulul de tiling de înaltă performanță `app/backend/tiles.py` (calcul bounds WebMercator prin `morecantile`, decupare pe ferestre rasterio și encoder PNG ultra-rapid) și integrat în `app/backend/main.py`. Serverul uvicorn servește tile-urile pe `GET /tiles/{layer}/{z}/{x}/{y}.png`.
+
+**Check output**:
+```
+200 11ms
+```
+
+**Blocaje**: niciunul (latența per tile este de ~6-11ms pe server cald, mult sub pragul de 150ms).
+
+**Urmează**: T-07 — backend minim (`app/backend/main.py` cu background processing și SQLite WAL).
+
+---
+
 ## 2026-08-17 (T-05)
 
 **Făcut**: implementat `app/backend/detect.py` cu funcția `detect_changes(before_path, after_path, patch=32, top_n=20, max_samples=10000)`. Antrenează `IsolationForest` pe features din `before.tif`, scorează patch-urile din `after.tif`, mapează scorurile la coordonate geografice și produce poligoane GeoJSON pentru candidați. Adăugate teste unitare în `tests/test_detect.py`.
