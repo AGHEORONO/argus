@@ -8,6 +8,21 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-17 (T-03)
+
+**Făcut**: generat perechea sintetică `data/reference/after.tif` prin injectarea a 4 modificări controlate (ștergere clădire, adăugare container albastru, defrișare/sol uscat, săpătură/tranșee) și creat `data/reference/truth.geojson` cu poligoanele geografice exacte și descrierile fiecărei modificări. Dimensiunile și CRS-ul sunt identice între `before.tif` și `after.tif`.
+
+**Check output**:
+```
+4 zone modificate
+```
+
+**Blocaje**: niciunul.
+
+**Urmează**: T-04 — extracție de features per patch (`app/backend/features.py`).
+
+---
+
 ## 2026-08-17 (T-02)
 
 **Făcut**: descărcat ortofotoplan de dronă de pe OpenAerialMap (Rumicucho Ruins, licență CC-BY, RGB uint8) în `data/reference/before.tif`. `data/` este confirmat ignorat de git.
