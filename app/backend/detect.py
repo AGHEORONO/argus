@@ -1,6 +1,5 @@
-"""Change detection using Isolation Forest on raster patch features."""
+"""Change detection using Isolation Forest on raster patch difference features."""
 
-import json
 from typing import Any, Dict, List, Optional
 import numpy as np
 import rasterio
@@ -20,7 +19,7 @@ def detect_changes(
     n_estimators: int = 100,
     random_state: int = 42,
 ) -> Dict[str, Any]:
-    """Detect anomalous change candidates between two rasters using Isolation Forest.
+    """Detect anomalous change candidates between two rasters using Isolation Forest on difference features.
 
     Args:
         before_path: Filepath to reference baseline GeoTIFF.
@@ -45,26 +44,29 @@ def detect_changes(
     with rasterio.open(after_path) as src_after:
         after_data = src_after.read()
 
-    # Extract patch features
+    # Extract patch features for both rasters
     X_before = extract_features(before_data, patch=patch)
     X_after = extract_features(after_data, patch=patch)
 
     n_w = width // patch
-    n_h = height // patch
     n_patches = len(X_before)
 
-    # Train Isolation Forest on baseline features
+    # Compute pairwise difference features: unchanged patches form the normal inlier distribution (~0),
+    # while changed areas produce outlier vectors in feature space.
+    X_diff = np.abs(X_after - X_before)
+
+    # Train Isolation Forest on difference feature space
     clf = IsolationForest(
         n_estimators=n_estimators,
         max_samples=min(max_samples, n_patches),
         random_state=random_state,
         n_jobs=-1,
     )
-    clf.fit(X_before)
+    clf.fit(X_diff)
 
-    # Score samples on after features (lower score_samples means more anomalous)
-    raw_scores = clf.score_samples(X_after)
-    # Higher anomaly_score means more anomalous
+    # Score samples on difference features (lower score_samples means more anomalous/isolated)
+    raw_scores = clf.score_samples(X_diff)
+    # Negate so higher anomaly_score means more anomalous
     anomaly_scores = -raw_scores
 
     # Rank patches by anomaly score descending

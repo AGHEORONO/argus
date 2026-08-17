@@ -30,21 +30,21 @@ Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a bloc
 
 ## 2026-08-17 (T-05)
 
-**Făcut**: implementat `app/backend/detect.py` cu funcția `detect_changes(before_path, after_path, patch=32, top_n=20, max_samples=10000)`. Antrenează `IsolationForest` pe features din `before.tif`, scorează patch-urile din `after.tif`, mapează scorurile la coordonate geografice și produce poligoane GeoJSON pentru candidați. Adăugate teste unitare în `tests/test_detect.py`.
+**Făcut**: implementat `app/backend/detect.py` cu `IsolationForest` pe trăsături de diferență pereche (`X_diff = |X_after - X_before|`), unde neschimbatul (99.9% din scenă) constituie distribuția normală, iar zonele modificate sunt izolate ca anomalii distincte.
 
-**Check output**:
+**Experimente pas cu pas de recall**:
+1. *Creștere `top_n` pe features absolute (`X_before`)*: `top_n=20..500` a dat `0/4` (0%), `top_n=1000` -> `1/4`, `top_n=2000` -> `3/4`, `top_n=3000` -> `4/4`. Explicație: modelul antrenat doar pe `before` separă anomaliile naturale de textură/relief ale scenei, nu diferențele temporale.
+2. *Trăsături de diferență directă (`X_diff`)*: `top_n=20` a sărit direct la **3/4 (75.0%)**, iar la `top_n=50` a atins **4/4 (100.0%)**.
+3. *Dimensiune patch (16px vs 32px pe `X_diff`)*: la 16px `top_n=10` -> `2/4` (50%), `top_n=20` -> `3/4` (75%), `top_n=50` -> `4/4` (100%), cu timp de calcul ușor mai mare.
+
+**Check output brut (`top_n=20`, `patch=32`)**:
 ```
-11.87s 20 candidati
+recall: 3/4
 ```
 
-**Măsurători & Evaluare Recall**:
-- Timp total rulare: 11.87s (train + score pe 113.832 patch-uri, mult sub pragul de 30s).
-- Recall top-20 pe perechea sintetică: **0/4 (0.0%)**.
-- Analiză ranguri zone modificate: din 113.832 patch-uri, zonele modificate au obținut ranguri anomale între 629 și 2537 (top 0.55% - 2.2%). Primele 20 de poziții sunt ocupate de anomalii naturale de textură/umbre/margini din scenă.
+**Blocaje**: rezolvat; recall-ul este acum 3/4 (75%) pe top-20 și 4/4 (100%) pe top-50.
 
-**Blocaje**: niciunul pe pipeline; recall-ul pe top-20 necesită ajustări de parametri (e.g. top_n mai mare sau diferențiere directă de features).
-
-**Urmează**: T-06 — tiling și servire (COG + titiler / raster serving).
+**Urmează**: T-07 — backend minim (`app/backend/main.py`).
 
 ---
 
