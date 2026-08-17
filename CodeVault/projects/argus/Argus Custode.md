@@ -20,10 +20,21 @@ Planificare. Zero cod, zero date de zbor, hardware de procesare încă necunoscu
 
 ## Navigare
 
+**Execuție** (de aici se lucrează zilnic):
+- [[Task-uri de start]] — T-01…T-08, fiecare cu checkul lui
+- [[Reguli pentru agent executant]] — contractul pentru modelul care execută
+- [[Jurnal]] — ce s-a lucrat, cu cifre și output de check
+
+**Context**:
 - [[Plan de implementare]] — cele 7 faze, ordinea reală de execuție, MVP vs. stretch
-- [[Intrebari deschise]] — necunoscutele și ce fază blochează fiecare
+- [[Performanta]] — bugetul de viteză și deciziile care îl susțin
 - [[Decizii]] — deciziile luate, cu motivul
-- [[Jurnal]] — jurnal de lucru pe zile
+- [[Intrebari deschise]] — necunoscutele și ce fază blochează fiecare
+- [[Caiet de practica]] — cum devine munca livrabil de concurs
+
+## Verificare
+
+O singură comandă, rulată după fiecare task: `python check.py`. Verifică integritatea vault-ului, structura repo-ului, faptul că niciun raster nu a intrat în git, și rulează testele odată ce există.
 
 ## Stack
 

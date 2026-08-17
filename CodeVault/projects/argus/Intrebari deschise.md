@@ -35,6 +35,14 @@ Proiect: [[Argus Custode]]. Fiecare necunoscută cu faza pe care o atinge și cu
 **De ce contează**: la o săptămână distanță, diferențele de iluminare și umbre domină semnalul real. La un sezon distanță, vegetația se schimbă natural peste tot și înecă schimbările care contează.
 **Fallback**: prag și dimensiune de patch reglabile, nu constante în cod. Se calibrează când apar date reale.
 
+## Î-05 — Licența ODM permite comercializare?
+
+**Blochează**: faza 2, **dacă** produsul se vinde. Nu blochează nimic în practică.
+**Situația**: OpenDroneMap e AGPL-3.0. Invocat ca proces separat în Docker, codul tău nu devine automat derivat — dar clauza de rețea din AGPL e exact genul de detaliu care se verifică înainte de a vinde, nu după.
+**De verificat**: dacă rularea ODM ca serviciu în spatele unui API comercial atrage obligații de publicare a codului. Răspunsul îl dă un avocat, nu documentația.
+**Alternative permisive de evaluat**: AliceVision/Meshroom (MPL-2.0), COLMAP. De comparat pe calitate și viteză abia dacă Î-05 devine blocantă.
+**Fallback**: pentru practică și concurs, AGPL nu e o problemă. Devine una doar la comercializare.
+
 ---
 
 Când o întrebare primește răspuns, mut-o în [[Decizii]] ca decizie, cu data, și șterge-o de aici.

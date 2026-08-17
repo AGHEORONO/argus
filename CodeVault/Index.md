@@ -11,10 +11,13 @@ Punctul de intrare în vault. Dacă tocmai ai clonat repo-ul pe altă mașină, 
 ## Proiect activ
 
 - [[Argus Custode]] — nota hub a proiectului de practică
+- [[Task-uri de start]] — de aici se lucrează: T-01…T-08, fiecare cu checkul lui
 - [[Plan de implementare]] — fazele, ordinea de atac, MVP vs. stretch
 - [[Intrebari deschise]] — ce nu știm încă și ce blochează fiecare necunoscută
 - [[Decizii]] — de ce am ales ce am ales
 - [[Jurnal]] — ce s-a lucrat, pe zile
+
+Verificare, după fiecare task: `python check.py` din rădăcina repo-ului.
 
 ## Structura folderelor
 
