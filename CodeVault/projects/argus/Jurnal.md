@@ -8,6 +8,21 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-17 (T-02)
+
+**Făcut**: descărcat ortofotoplan de dronă de pe OpenAerialMap (Rumicucho Ruins, licență CC-BY, RGB uint8) în `data/reference/before.tif`. `data/` este confirmat ignorat de git.
+
+**Check output**:
+```
+EPSG:4326 8959 13066
+```
+
+**Blocaje**: niciunul.
+
+**Urmează**: T-03 — perechea sintetică before/after (`data/reference/after.tif` + `data/reference/truth.geojson`).
+
+---
+
 ## 2026-08-17 (T-01)
 
 **Făcut**: creat mediul Python (`.venv`), instalat dependențele de bază (`numpy`, `rasterio`, `scikit-learn`, `shapely`, `fastapi`, `uvicorn`, `rio-cogeo`, `pytest`), generat `app/requirements.txt` cu versiuni fixate, creat structura de foldere `app/backend/` cu `__init__.py` și `app/frontend/`.
