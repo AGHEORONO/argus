@@ -8,6 +8,21 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-17 (T-04)
+
+**Făcut**: implementat `app/backend/features.py` cu funcția `extract_features(raster, patch=32)`. Folosește reshape în blocuri 5D și reduceri vectorizate NumPy pe axe (fără bucle Python), extrăgând culoare medie, varianță locală și gradienți spațiali per canal. Adăugate teste unitare în `tests/test_features.py` și `pytest.ini`.
+
+**Check output**:
+```
+(113832, 12) 5.20s
+```
+
+**Blocaje**: niciunul.
+
+**Urmează**: T-05 — detecție cu Isolation Forest (`app/backend/detect.py`).
+
+---
+
 ## 2026-08-17 (T-03)
 
 **Făcut**: generat perechea sintetică `data/reference/after.tif` prin injectarea a 4 modificări controlate (ștergere clădire, adăugare container albastru, defrișare/sol uscat, săpătură/tranșee) și creat `data/reference/truth.geojson` cu poligoanele geografice exacte și descrierile fiecărei modificări. Dimensiunile și CRS-ul sunt identice între `before.tif` și `after.tif`.
