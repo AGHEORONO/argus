@@ -12,6 +12,7 @@ Punctul de intrare în vault. Dacă tocmai ai clonat repo-ul pe altă mașină, 
 
 - [[Argus Custode]] — nota hub a proiectului de practică
 - [[Task-uri de start]] — de aici se lucrează: T-01…T-08, fiecare cu checkul lui
+- [[De facut]] — tot ce a rămas deschis, de reluat la nevoie
 - [[Plan de implementare]] — fazele, ordinea de atac, MVP vs. stretch
 - [[Intrebari deschise]] — ce nu știm încă și ce blochează fiecare necunoscută
 - [[Decizii]] — de ce am ales ce am ales
