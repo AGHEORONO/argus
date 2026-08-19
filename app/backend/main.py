@@ -95,7 +95,7 @@ def read_root():
     return {"name": "Argus Custode API", "status": "running"}
 
 
-def run_detection_job(flight_id: str, before_path: str, after_path: str, top_n: int = 20):
+def run_detection_job(flight_id: str, before_path: str, after_path: str, top_n: int = 50):
     """Background task function executing change detection without blocking the main event loop."""
     try:
         with get_db() as conn:

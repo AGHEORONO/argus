@@ -14,7 +14,7 @@ def detect_changes(
     before_path: str,
     after_path: str,
     patch: int = 32,
-    top_n: int = 20,
+    top_n: int = 50,
     max_samples: int = 10000,
     n_estimators: int = 100,
     random_state: int = 42,

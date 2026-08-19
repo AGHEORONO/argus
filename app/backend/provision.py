@@ -77,11 +77,15 @@ def generate_synthetic_pair():
     after_data = data.copy()
     c, h, w = after_data.shape
 
+    # Seed fixat: setul sintetic e gandit ca test de regresie stabil intre masini
+    # (vezi Plan de implementare.md), deci zgomotul injectat trebuie sa fie reproductibil.
+    rng = np.random.default_rng(42)
+
     # Zone 1: Structure removal (uniform pavement patch)
     r1, r2, c1, c2 = 1200, 1500, 2000, 2350
     mean_surrounding = np.mean(after_data[:, r1 - 50 : r1, c1:c2], axis=(1, 2), keepdims=True)
     after_data[:, r1:r2, c1:c2] = np.clip(
-        mean_surrounding + np.random.normal(0, 3, (c, r2 - r1, c2 - c1)), 0, 255
+        mean_surrounding + rng.normal(0, 3, (c, r2 - r1, c2 - c1)), 0, 255
     ).astype(np.uint8)
 
     # Zone 2: Blue storage container / new structure
@@ -150,7 +154,7 @@ def seed_demo_flight(get_db_func):
             return
 
         logger.info("Computing change detection for demo flight 'test'...")
-        result = detect_changes(BEFORE_PATH, AFTER_PATH, top_n=20)
+        result = detect_changes(BEFORE_PATH, AFTER_PATH, top_n=50)
         result_json = json.dumps(result)
 
         conn.execute(

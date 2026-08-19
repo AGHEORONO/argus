@@ -8,6 +8,28 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-19 (mașină nouă — desktop, T-05 corecție)
+
+**Continuare pe altă mașină**: `git clone`, `setup-skills.ps1`, `.venv` recreat din `app/requirements.txt` (`imports OK`), backend pornit → `provision.py` a regenerat `before.tif`/`after.tif`/`truth.geojson`/COG-urile (gitignored, lipseau). Suită de teste: 9/9 trecute, verificat prin rulare directă, nu presupus.
+
+**Corectare a cifrelor de recall din T-05, făcută de Claude după verificare independentă**: niciuna din cifrele raportate atunci nu s-a reprodus pe această mașină.
+
+| Config | Jurnal (2026-08-17) | Măsurat acum, independent |
+|---|---|---|
+| `top_n=20`, `patch=32` | 3/4 | **2/4** (zone_2 și zone_3 ratate) |
+| `top_n=50`, `patch=32` | 4/4 | **3/4** (zone_3 ratată, rang real ~109) |
+| `top_n=50`, `patch=16` | 4/4 | zone_3 ratată, rang real ~112 |
+
+Verificare făcută prin apartenență directă de `patch_index` calculat din bound-urile în pixeli ale `truth.geojson`, nu prin aproximare — zona 3 ("Vegetation clearing") nu apare în top-100+ candidați pe niciuna din variante.
+
+**Cauză parțială găsită și reparată**: `generate_synthetic_pair()` din `provision.py` folosea `np.random.normal(...)` fără seed fixat pentru zgomotul din zona 1 — la fiecare regenerare pe altă mașină, `after.tif` nu mai era identic bit-cu-bit cu rularea originală, deși [[Plan de implementare]] declară explicit setul sintetic ca test de regresie stabil între mașini. Fixat cu `np.random.default_rng(42)`. **Nu explică singură** discrepanța la zonele 2-4, care sunt transformări deterministe pe (probabil) același `before.tif` — rămâne necunoscută reală, posibil versiuni de bibliotecă diferite sau `before.tif` nu e identic la byte. Nu s-a săpat mai departe (ar necesita hash salvat la download, care lipsește din [[Task-uri de start]]/T-02 — de adăugat).
+
+**Acțiune luată**: implicit `top_n` crescut de la 20 la 50 în `detect_changes()`, `run_detection_job()` și seed-ul din `provision.py` — rămâne o îmbunătățire reală (2/4 → 3/4 pe această mașină), dar **nu** atinge 4/4 cum pretindea jurnalul vechi. Vezi [[Decizii]] D-009.
+
+**Urmează**: dacă contează recall 4/4 real, zona 3 (schimbare de vegetație, contrast/luminozitate) pare un caz slab pentru feature-urile curente (culoare medie, varianță, gradient) — merită testat un feature dedicat (ex. raport canale similar NDVI) înainte de a mai crește doar `top_n`/scădea `patch`-ul, care doar adaugă zgomot fără să rezolve cauza.
+
+---
+
 ## 2026-08-17 (Faza 7 — corecție)
 
 **Corectare a intrării de mai jos**, făcută de Claude după verificare independentă: `https://argus-backend.onrender.com` **nu există** — `curl` pe acel URL dă timeout după 15s (cod `000`), nu s-a creat niciodată un serviciu Render real. Nu a fost verificat niciun URL Vercel. Ce s-a scris jos ca „Instrucțiuni de conectare" cu „URL rezultat" era o simulare prezentată ca fapt împlinit, fără dovadă — exact ce interzice regula de verificare a proiectului.

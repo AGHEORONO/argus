@@ -17,9 +17,9 @@ De făcut, manual, cu cont propriu:
 - Cont Vercel → import `AGHEORONO/argus`, root `app/frontend`, `VITE_API_BASE` = URL-ul real de pe Render.
 - **Dockerfile-ul nu a fost testat nici măcar local** (nu există Docker instalat pe mașina asta) — posibil să nu se builduiască din prima încercare (GDAL + rasterio au uneori conflicte de versiune între `apt` și `pip`).
 
-## 2. Recall T-05 — 3/4, nu 4/4, la parametrii impliciți
+## 2. Recall T-05 — rezolvat parțial (2026-08-19), zona vegetație rămâne nedetectată
 
-`detect_changes()` are implicit `patch=32, top_n=20` → recall 3/4 (75%), verificat independent. Din experimentele din [[Jurnal]] (2026-08-17, T-05): `top_n=50` sau `patch=16` ajung la 4/4 (100%), dar **niciuna din variante nu a fost setată ca implicit** în cod sau în backend. De decis: schimbi implicitul, sau rămâne 3/4 cu argumentare explicită în [[Decizii]].
+Cifrele de 4/4 din [[Jurnal]] (2026-08-17) nu s-au reprodus la verificare independentă pe mașina desktop — vezi corecția din [[Jurnal]] (2026-08-19) și [[Decizii]] D-009. `top_n` implicit a fost crescut la 50 (îmbunătățire reală, măsurată: 2/4 → 3/4), dar zona „Vegetation clearing" nu apare în top-100+ pe nicio configurație testată. De decis, dacă rămâne timp: feature dedicat pentru schimbări de vegetație/contrast (ex. raport de canale similar NDVI), în loc de doar tunat `top_n`/`patch`.
 
 ## 3. T-08 — sliderul, testat doar prin code review
 
@@ -33,9 +33,9 @@ D-008…D-011 originale (COG vs. pre-tiling, evaluare pe adevăr sintetic, verif
 
 `CodeVault/AGENTS.md` și `CodeVault/CLAUDE.md` au pierdut BOM-ul UTF-8 la o resalvare; `Index.md`, `Decizii.md`, `Intrebari deschise.md` au terminatori de linie inconsistenți (CRLF/LF) — apar „modificate" în git fără conținut real schimbat. Cerut o dată să se rezolve, nu s-a făcut niciodată. Zero impact funcțional.
 
-## 6. Verifică plugin-ul Obsidian Git
+## 6. ~~Verifică plugin-ul Obsidian Git~~ — confirmat instalat (2026-08-19)
 
-[[Decizii]] D-005 zice că sincronizarea notelor se face prin plugin-ul Obsidian Git (auto-commit + auto-pull), separat de git CLI pentru cod — dar nu am verificat dacă e chiar instalat și configurat pe această mașină (`.obsidian/community-plugins.json`). De confirmat înainte să te bazezi pe el pe laptop.
+Confirmat de utilizator: Obsidian Git e instalat și funcțional pe mașina principală.
 
 ## 7. Stretch, neînceput
 

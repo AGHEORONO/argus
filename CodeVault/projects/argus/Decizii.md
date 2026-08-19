@@ -50,3 +50,9 @@ La pornirea backend-ului în `lifespan`, se verifică și se seedează automat d
 **De ce**: Render (tier gratuit) șterge discul efemer la fiecare restart/redeploy după inactivitate. Pentru demo public, utilizatorul trebuie să poată deschide linkul și să vadă imediat harta și anomaliile fără să fie nevoie de re-upload manual.
 **Consecință / Notă de producție**: la trecerea la date reale de producție este obligatoriu storage persistent extern (AWS S3 / Cloudflare R2 pentru rastere și PostgreSQL / PostGIS gestionat pentru metadata).
 
+## D-009 — `top_n` implicit crescut la 50, fără a pretinde 4/4 (2026-08-19)
+
+Implicit `top_n=20` → `50` în `detect_changes()`, `run_detection_job()`, seed-ul din `provision.py`.
+**De ce**: măsurat independent pe mașina desktop, recall crește de la 2/4 la 3/4 (vezi [[Jurnal]] 2026-08-19), fără cost suplimentar de calcul (`patch` neschimbat). Cifrele de 4/4 raportate anterior în [[Jurnal]] (2026-08-17, T-05) nu s-au reprodus și sunt tratate ca nesigure.
+**Rămâne deschis**: zona „Vegetation clearing" nu apare în top-100+ candidați pe nicio configurație testată — nu e o problemă de prag/`top_n`, pare o limitare reală a feature-urilor curente pentru schimbări de tip vegetație/contrast. Nu s-a rezolvat, doar documentat.
+
