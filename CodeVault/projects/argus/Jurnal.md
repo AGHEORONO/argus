@@ -8,6 +8,30 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-21 (Faza 7 — backend Render, live real de data asta)
+
+**Făcut**: creat serviciul Render (`argus-backend`) direct prin API (owner ID + API key generat de utilizator, deployment Blueprint din `render.yaml`/`Dockerfile`). Trei încercări, fiecare cu eșec real diagnosticat din log-urile API, nu presupus:
+
+1. **`build_failed`** — `Dockerfile` fixa `python:3.11-slim`, dar `requirements.txt` era `pip freeze` de pe Python 3.12 local; `numpy==2.5.2` n-are wheel pentru 3.11. Fix: `FROM python:3.12-slim`.
+2. **`update_failed`, exit 137 (OOM)** — build trecut, dar containerul murea la pornire în `lifespan`/`provision.py`. Cauza: `generate_synthetic_pair()` + `detect_changes()` încărcau rasterul întreg în memorie de mai multe ori (~670MB+), peste limita de 512MB de pe free tier. Fix: streaming pe ferestre (`rasterio.windows.Window`) în ambele funcții — nu tot rasterul deodata. Rezultat: OOM tot a apărut, dar după 2:28 în loc de 16s — dovadă că fix-ul a ajutat real, doar nu suficient.
+3. **Tot `update_failed`/137** — chiar streamed, `build_cog()` (de doua ori) + antrenarea Isolation Forest tot depășeau 512MB pe rasterul aproape la rezoluție completă. Fix final: `downsample_if_needed()` reduce `before.tif` la max 3000px pe latura lungă la provisioning (citire decimată GDAL, nu materializează rezoluția completă). Zonele sintetice din `generate_synthetic_pair()` (coordonate fixe, calculate pentru 8959×13066) sunt acum scalate proporțional (`scaled()`), altfel ar fi căzut în afara imaginii la rezoluție mai mică.
+
+**Verificat independent, nu doar status API** (regula proiectului, deja încălcată o dată pe 17 aug):
+```
+GET /                      -> 200 {"name":"Argus Custode API","status":"running"}
+GET /flights/test/status   -> 200 {"status":"done", ...}
+GET /flights/test/result   -> 200, GeoJSON FeatureCollection valid
+GET /tiles/before/1/1/0.png -> 200, 1225 bytes PNG real
+```
+
+**URL public confirmat, real**: `https://argus-backend-yw3h.onrender.com`
+
+**Descoperire secundară, notată cinstit**: la rezoluția redusă (2057×3000), recall-ul T-05 a ieșit **4/4** (mai bun decât 3/4 la rezoluție completă) — măsurat, nu explicat pe deplin de ce. Posibil netezirea din resampling reduce zgomotul local (varianță/gradient) care ascundea zona de vegetație. Nu s-a investigat mai departe.
+
+**Urmează**: Vercel (frontend), cu `VITE_API_BASE=https://argus-backend-yw3h.onrender.com`.
+
+---
+
 ## 2026-08-19 (mașină nouă — desktop, T-05 corecție)
 
 **Continuare pe altă mașină**: `git clone`, `setup-skills.ps1`, `.venv` recreat din `app/requirements.txt` (`imports OK`), backend pornit → `provision.py` a regenerat `before.tif`/`after.tif`/`truth.geojson`/COG-urile (gitignored, lipseau). Suită de teste: 9/9 trecute, verificat prin rulare directă, nu presupus.
