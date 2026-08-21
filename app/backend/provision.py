@@ -7,11 +7,16 @@ import urllib.request
 import numpy as np
 import rasterio
 from rasterio.transform import xy
+from rasterio.windows import Window
 from rio_cogeo.cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
 from shapely.geometry import Polygon, mapping
 
 from app.backend.detect import detect_changes
+
+# Copiere in benzi de randuri, nu tot rasterul deodata - Render free tier are 512MB RAM,
+# iar before.tif intreg (~9000x13000x3) ocupa singur ~335MB per array in memorie.
+COPY_CHUNK_ROWS = 512
 
 logger = logging.getLogger("argus.provision")
 
@@ -67,46 +72,64 @@ def build_cog(src_path: str, dst_path: str):
 
 
 def generate_synthetic_pair():
-    """Generate synthetic modifications on before.tif to create after.tif and truth.geojson."""
+    """Generate synthetic modifications on before.tif to create after.tif and truth.geojson.
+
+    Streamed in row-chunks + small per-zone windows (never the full raster in memory) -
+    Render free tier has 512MB RAM, and the full array would alone take ~335MB.
+    """
     with rasterio.open(BEFORE_PATH) as src:
         profile = src.profile.copy()
-        data = src.read()
         transform = src.transform
         crs = src.crs
+        width, height = src.width, src.height
 
-    after_data = data.copy()
-    c, h, w = after_data.shape
+        with rasterio.open(AFTER_PATH, "w", **profile) as dst:
+            for row0 in range(0, height, COPY_CHUNK_ROWS):
+                rows = min(COPY_CHUNK_ROWS, height - row0)
+                window = Window(0, row0, width, rows)
+                dst.write(src.read(window=window), window=window)
 
     # Seed fixat: setul sintetic e gandit ca test de regresie stabil intre masini
     # (vezi Plan de implementare.md), deci zgomotul injectat trebuie sa fie reproductibil.
     rng = np.random.default_rng(42)
 
-    # Zone 1: Structure removal (uniform pavement patch)
-    r1, r2, c1, c2 = 1200, 1500, 2000, 2350
-    mean_surrounding = np.mean(after_data[:, r1 - 50 : r1, c1:c2], axis=(1, 2), keepdims=True)
-    after_data[:, r1:r2, c1:c2] = np.clip(
-        mean_surrounding + rng.normal(0, 3, (c, r2 - r1, c2 - c1)), 0, 255
-    ).astype(np.uint8)
+    with rasterio.open(AFTER_PATH, "r+") as dst:
+        # Zone 1: Structure removal (uniform pavement patch). Media se calculeaza din
+        # banda de deasupra zonei, inca neatinsa - citita direct din after.tif proaspat copiat.
+        r1, r2, c1, c2 = 1200, 1500, 2000, 2350
+        surround = dst.read(window=Window(c1, r1 - 50, c2 - c1, 50))
+        mean_surrounding = np.mean(surround, axis=(1, 2), keepdims=True)
+        zone1_window = Window(c1, r1, c2 - c1, r2 - r1)
+        zone1_shape = (dst.count, r2 - r1, c2 - c1)
+        zone1 = np.clip(mean_surrounding + rng.normal(0, 3, zone1_shape), 0, 255).astype(np.uint8)
+        dst.write(zone1, window=zone1_window)
 
-    # Zone 2: Blue storage container / new structure
-    r3, r4, c3, c4 = 3000, 3250, 4500, 4800
-    after_data[0, r3:r4, c3:c4] = 30
-    after_data[1, r3:r4, c3:c4] = 90
-    after_data[2, r3:r4, c3:c4] = 210
+        # Zone 2: Blue storage container / new structure - fill uniform, nu are nevoie sa citeasca
+        r3, r4, c3, c4 = 3000, 3250, 4500, 4800
+        zone2_window = Window(c3, r3, c4 - c3, r4 - r3)
+        zone2_hw = (r4 - r3, c4 - c3)
+        dst.write(np.full(zone2_hw, 30, dtype=np.uint8), 1, window=zone2_window)
+        dst.write(np.full(zone2_hw, 90, dtype=np.uint8), 2, window=zone2_window)
+        dst.write(np.full(zone2_hw, 210, dtype=np.uint8), 3, window=zone2_window)
 
-    # Zone 3: Vegetation clearing (dry bare ground)
-    r5, r6, c5, c6 = 5000, 5400, 1500, 1900
-    after_data[0, r5:r6, c5:c6] = np.clip(after_data[0, r5:r6, c5:c6] * 1.4 + 20, 0, 255)
-    after_data[1, r5:r6, c5:c6] = np.clip(after_data[1, r5:r6, c5:c6] * 0.7 - 10, 0, 255)
-    after_data[2, r5:r6, c5:c6] = np.clip(after_data[2, r5:r6, c5:c6] * 0.6 - 15, 0, 255)
+        # Zone 3: Vegetation clearing (dry bare ground)
+        r5, r6, c5, c6 = 5000, 5400, 1500, 1900
+        zone3_window = Window(c5, r5, c6 - c5, r6 - r5)
+        zone3 = dst.read(window=zone3_window).astype(np.float64)
+        zone3[0] = np.clip(zone3[0] * 1.4 + 20, 0, 255)
+        zone3[1] = np.clip(zone3[1] * 0.7 - 10, 0, 255)
+        zone3[2] = np.clip(zone3[2] * 0.6 - 15, 0, 255)
+        dst.write(zone3.astype(np.uint8), window=zone3_window)
 
-    # Zone 4: Excavation trench (dark shadow interior, bright excavated edge)
-    r7, r8, c7, c8 = 2200, 2800, 6000, 6150
-    after_data[:, r7:r8, c7:c8] = np.clip(after_data[:, r7:r8, c7:c8] * 0.25, 0, 255)
-    after_data[:, r7:r8, c8 : c8 + 40] = np.clip(after_data[:, r7:r8, c8 : c8 + 40] * 1.5 + 40, 0, 255)
+        # Zone 4: Excavation trench (dark shadow interior, bright excavated edge)
+        r7, r8, c7, c8 = 2200, 2800, 6000, 6150
+        zone4a_window = Window(c7, r7, c8 - c7, r8 - r7)
+        zone4a = np.clip(dst.read(window=zone4a_window).astype(np.float64) * 0.25, 0, 255)
+        dst.write(zone4a.astype(np.uint8), window=zone4a_window)
 
-    with rasterio.open(AFTER_PATH, "w", **profile) as dst:
-        dst.write(after_data)
+        zone4b_window = Window(c8, r7, 40, r8 - r7)
+        zone4b = np.clip(dst.read(window=zone4b_window).astype(np.float64) * 1.5 + 40, 0, 255)
+        dst.write(zone4b.astype(np.uint8), window=zone4b_window)
 
     # Build truth.geojson
     def make_poly(rmin, rmax, cmin, cmax):

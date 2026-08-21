@@ -4,10 +4,32 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import rasterio
 from rasterio.transform import xy
+from rasterio.windows import Window
 from shapely.geometry import Polygon, mapping
 from sklearn.ensemble import IsolationForest
 
 from app.backend.features import extract_features
+
+# Cate randuri de patch-uri citim odata: mentine memoria per fasie mica (zeci de MB)
+# in loc sa incarcam rasterul intreg (~335MB pentru before.tif la rezolutia demo).
+STRIP_PATCH_ROWS = 64
+
+
+def _extract_features_streamed(path: str, patch: int) -> np.ndarray:
+    """Read a raster in horizontal strips aligned to the patch grid and extract features
+    per strip, concatenating results - never holds the full raster array in memory."""
+    with rasterio.open(path) as src:
+        n_w = src.width // patch
+        n_h = src.height // patch
+        strip_rows = STRIP_PATCH_ROWS * patch
+
+        chunks = []
+        for row0 in range(0, n_h * patch, strip_rows):
+            rows = min(strip_rows, n_h * patch - row0)
+            window = Window(0, row0, n_w * patch, rows)
+            chunks.append(extract_features(src.read(window=window), patch=patch))
+
+        return np.concatenate(chunks, axis=0)
 
 
 def detect_changes(
@@ -35,18 +57,14 @@ def detect_changes(
         with anomaly scores and metadata.
     """
     with rasterio.open(before_path) as src_before:
-        before_data = src_before.read()
         transform = src_before.transform
         crs = src_before.crs
         width = src_before.width
-        height = src_before.height
 
-    with rasterio.open(after_path) as src_after:
-        after_data = src_after.read()
-
-    # Extract patch features for both rasters
-    X_before = extract_features(before_data, patch=patch)
-    X_after = extract_features(after_data, patch=patch)
+    # Extract patch features for both rasters, streamed in row-strips (nu tot rasterul
+    # deodata) - vezi _extract_features_streamed, necesar pentru Render free tier (512MB).
+    X_before = _extract_features_streamed(before_path, patch)
+    X_after = _extract_features_streamed(after_path, patch)
 
     n_w = width // patch
     n_patches = len(X_before)
