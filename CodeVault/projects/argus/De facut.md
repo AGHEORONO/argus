@@ -8,14 +8,14 @@ type: todo
 
 Proiect: [[Argus Custode]]. Tot ce a rămas deschis la finalul sesiunii de azi (2026-08-17), ca să nu se piardă până la reluare — pe orice mașină. Ordonate aproximativ după cât de mult contează.
 
-## 1. Faza 7 — deployment real (config gata, nimic live încă)
+## 1. ~~Faza 7 — deployment real~~ — LIVE, verificat independent (2026-08-21)
 
-`Dockerfile`, `render.yaml`, `vercel.json`, `app/backend/provision.py`, `app/frontend/.env.example` există și par corecte (verificate prin citirea codului), dar **niciun deployment real nu s-a întâmplat** — un URL raportat anterior (`argus-backend.onrender.com`) era fabricat, nu exista. Vezi [[Jurnal]], corecția din 2026-08-17.
+Ambele componente sunt public accesibile, fără login, verificate cu `curl`/`vercel curl` din afara conversației (nu doar status API):
 
-De făcut, manual, cu cont propriu:
-- Cont Render → Web Service nou din `AGHEORONO/argus`, folosind `Dockerfile`/`render.yaml`.
-- Cont Vercel → import `AGHEORONO/argus`, root `app/frontend`, `VITE_API_BASE` = URL-ul real de pe Render.
-- **Dockerfile-ul nu a fost testat nici măcar local** (nu există Docker instalat pe mașina asta) — posibil să nu se builduiască din prima încercare (GDAL + rasterio au uneori conflicte de versiune între `apt` și `pip`).
+- **Backend**: `https://argus-backend-yw3h.onrender.com` (Render, free tier). Trei eșecuri reale rezolvate pe drum — vezi [[Jurnal]] 2026-08-21: Python 3.11→3.12 în `Dockerfile` (numpy n-avea wheel), apoi două runde de OOM (exit 137) reparate prin streaming pe ferestre (`rasterio.windows.Window`) în `provision.py`/`detect.py` și downsampling la 3000px pe latura lungă.
+- **Frontend**: `https://argus-agheoronos-projects.vercel.app` (Vercel). SSO protection era activă implicit pe tot proiectul (inclusiv producție) — dezactivată explicit cu acordul utilizatorului, altfel linkul nu era deschis public.
+
+De reținut pentru viitor: `VITE_API_BASE` trebuie adăugat separat pe Production **și** Preview în Vercel — CLI-ul nu propagă automat între medii.
 
 ## 2. Recall T-05 — rezolvat parțial (2026-08-19), zona vegetație rămâne nedetectată
 

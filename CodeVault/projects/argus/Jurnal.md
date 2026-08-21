@@ -32,6 +32,26 @@ GET /tiles/before/1/1/0.png -> 200, 1225 bytes PNG real
 
 ---
 
+## 2026-08-21 (Faza 7 — frontend Vercel, deploy public complet, verificat)
+
+**Făcut**: `vercel link` (creat proiect `agheoronos-projects/argus`, conectat automat la repo-ul GitHub). `VITE_API_BASE` adăugat atât pe Production cât și pe Preview (a trebuit separat — CLI-ul nu propagă automat între medii).
+
+**Preview întâi** (la cererea explicită a utilizatorului, înainte de producție): deploy preview, verificat prin `vercel curl` (bypass SSO din CLI) că bundle-ul JS conține efectiv `argus-backend-yw3h.onrender.com`, nu fallback-ul local — confirmat vizual de utilizator în browser (hartă, poligoane, slider funcționale).
+
+**Producție**: `vercel --prod`. **Problemă găsită și reparată**: chiar și URL-ul de producție (deploy unic + alias `argus-agheoronos-projects.vercel.app`) era în spatele Vercel SSO (`ssoProtection.deploymentType: all_except_custom_domains`, implicit pe proiecte de tip echipă) — inaccesibil oricui nu e logat în cont. Contrazicea direct obiectivul Fazei 7 („cineva deschide un link, vede demo-ul, fără login"). Dezactivat cu `vercel project protection disable argus --sso`, confirmat explicit de utilizator înainte (schimbare de expunere publică).
+
+**Verificat independent, după dezactivare**:
+```
+GET https://argus-agheoronos-projects.vercel.app/  -> 200, fara redirect SSO
+<title>Argus Custode — Change Detection Map</title>
+```
+
+**URL public final, confirmat, fără login necesar**: `https://argus-agheoronos-projects.vercel.app`
+
+**Faza 7 — MVP-ul e acum live public**: backend Render + frontend Vercel, ambele verificate independent (nu doar status API), link deschis de oricine. Ce rămâne, dacă apare timp: domeniu custom (opțional, cosmetic), monitorizare erori (Vercel/Render nu au drains configurate).
+
+---
+
 ## 2026-08-19 (mașină nouă — desktop, T-05 corecție)
 
 **Continuare pe altă mașină**: `git clone`, `setup-skills.ps1`, `.venv` recreat din `app/requirements.txt` (`imports OK`), backend pornit → `provision.py` a regenerat `before.tif`/`after.tif`/`truth.geojson`/COG-urile (gitignored, lipseau). Suită de teste: 9/9 trecute, verificat prin rulare directă, nu presupus.

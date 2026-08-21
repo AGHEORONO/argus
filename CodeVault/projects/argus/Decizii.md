@@ -56,3 +56,15 @@ Implicit `top_n=20` → `50` în `detect_changes()`, `run_detection_job()`, seed
 **De ce**: măsurat independent pe mașina desktop, recall crește de la 2/4 la 3/4 (vezi [[Jurnal]] 2026-08-19), fără cost suplimentar de calcul (`patch` neschimbat). Cifrele de 4/4 raportate anterior în [[Jurnal]] (2026-08-17, T-05) nu s-au reprodus și sunt tratate ca nesigure.
 **Rămâne deschis**: zona „Vegetation clearing" nu apare în top-100+ candidați pe nicio configurație testată — nu e o problemă de prag/`top_n`, pare o limitare reală a feature-urilor curente pentru schimbări de tip vegetație/contrast. Nu s-a rezolvat, doar documentat.
 
+## D-010 — Raster demo redus la max 3000px pe latura lungă, pentru Render free tier (2026-08-21)
+
+`downsample_if_needed()` reduce `before.tif` la provisioning, cu citire decimată GDAL (nu materializează rezoluția completă în memorie). Zonele sintetice din `generate_synthetic_pair()` sunt scalate proporțional față de rezoluția originală (8959×13066), nu mai sunt constante fixe.
+**De ce**: chiar și cu citire pe ferestre (streaming, fără fix separat de decizie), `build_cog()` + antrenarea Isolation Forest tot depășeau 512MB pe rasterul aproape la rezoluție completă — OOM (exit 137) confirmat de două ori în log-urile Render. Rezoluția redusă a fost singura variantă care a dus efectiv la un deploy `live`, verificat.
+**Consecință**: demo-ul public rulează la rezoluție mai mică decât ce ai local. Recall-ul măsurat la această rezoluție a ieșit 4/4 (mai bun decât 3/4 la full res) — notat cinstit, nu explicat pe deplin.
+
+## D-011 — SSO protection dezactivată pe proiectul Vercel (2026-08-21)
+
+`vercel project protection disable argus --sso`, confirmat explicit de utilizator înainte de execuție.
+**De ce**: implicit, Vercel pune SSO protection pe toate deploy-urile unui proiect de tip echipă (`ssoProtection.deploymentType: all_except_custom_domains`) — inclusiv producție. Contrazicea direct obiectivul Fazei 7 („cineva deschide un link, vede demo-ul, fără login"). Verificat înainte și după cu `curl`: înainte, 302 către `vercel.com/sso-api`; după, 200 direct.
+**Consecință**: oricine cu link-ul vede demo-ul, inclusiv API-ul de backend din spate (deja fără protecție, CORS deschis `allow_origins=["*"]`). Acceptabil pentru un proiect de practică cu date sintetice publice; de reconsiderat dacă la un moment dat conține date reale sensibile ale firmei.
+
