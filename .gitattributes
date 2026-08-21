@@ -1,0 +1,13 @@
+# Normalizeaza line-ending-urile in repo (LF), indiferent de core.autocrlf local pe fiecare
+# masina/OS - fara asta, notele din CodeVault apareau "modificate" in git fara continut real
+# schimbat. Vezi De facut.md punctul 5.
+* text=auto eol=lf
+
+# Rastere si baze de date sunt binare - niciodata normalizate ca text
+*.tif binary
+*.tiff binary
+*.db binary
+*.sqlite binary
+*.png binary
+*.jpg binary
+*.jpeg binary

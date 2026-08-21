@@ -17,9 +17,9 @@ Ambele componente sunt public accesibile, fără login, verificate cu `curl`/`ve
 
 De reținut pentru viitor: `VITE_API_BASE` trebuie adăugat separat pe Production **și** Preview în Vercel — CLI-ul nu propagă automat între medii.
 
-## 2. Recall T-05 — rezolvat parțial (2026-08-19), zona vegetație rămâne nedetectată
+## 2. ~~Recall T-05~~ — 4/4, confirmat pe datele curente de producție (2026-08-21)
 
-Cifrele de 4/4 din [[Jurnal]] (2026-08-17) nu s-au reprodus la verificare independentă pe mașina desktop — vezi corecția din [[Jurnal]] (2026-08-19) și [[Decizii]] D-009. `top_n` implicit a fost crescut la 50 (îmbunătățire reală, măsurată: 2/4 → 3/4), dar zona „Vegetation clearing" nu apare în top-100+ pe nicio configurație testată. De decis, dacă rămâne timp: feature dedicat pentru schimbări de vegetație/contrast (ex. raport de canale similar NDVI), în loc de doar tunat `top_n`/`patch`.
+Traseu complet: 3/4 (17 aug, neverificat/nereprodus) → 2/4 (19 aug, verificare independentă pe desktop, `top_n=20`) → 3/4 (`top_n=50`, tot fără zona de vegetație) → **4/4** (21 aug, după downsampling-ul din D-010 — zona de vegetație a devenit detectabilă la rezoluția redusă, efect secundar neplanificat). Verificat riguros cu `detect_changes()` la parametrii impliciți din cod, pe fișierele exact ca în producție. Nu s-a mai investigat *de ce* rezoluția mai mică ajută (posibil netezire/reducere zgomot din resampling) — funcțional, e rezolvat.
 
 ## 3. T-08 — sliderul, testat doar prin code review
 
@@ -29,9 +29,9 @@ Am confirmat prin citirea codului că `setPaintProperty` nu poate face cereri de
 
 D-008…D-011 originale (COG vs. pre-tiling, evaluare pe adevăr sintetic, verificare mecanică, licența AGPL a ODM) au fost șterse la revert-ul commit-ului `d24a97f` și nu au fost rescrise — deși tot ce descriau chiar s-a implementat între timp (COG la T-06, perechea sintetică la T-03). `D-008` există acum din nou în [[Decizii]], dar cu alt conținut (seed pe disc efemer Render). Pur documentație lipsă, nu blochează codul.
 
-## 5. Curățenie cosmetică, minoră
+## 5. ~~Curățenie cosmetică~~ — cauza reală reparată (2026-08-21)
 
-`CodeVault/AGENTS.md` și `CodeVault/CLAUDE.md` au pierdut BOM-ul UTF-8 la o resalvare; `Index.md`, `Decizii.md`, `Intrebari deschise.md` au terminatori de linie inconsistenți (CRLF/LF) — apar „modificate" în git fără conținut real schimbat. Cerut o dată să se rezolve, nu s-a făcut niciodată. Zero impact funcțional.
+Nu era o problemă de fișiere individuale (BOM-ul pe `AGENTS.md`/`CLAUDE.md` era deja intact la verificare) — cauza reală era lipsa unui `.gitattributes` combinată cu `core.autocrlf=true` pe Windows, care făcea ca fiecare checkout pe altă mașină/OS să normalizeze altfel line-ending-urile. Adăugat `.gitattributes` (`* text=auto eol=lf`, rastere/DB explicit binare) și rulat `git add --renormalize .` ca fixul să se aplice și retroactiv, nu doar la clone-uri viitoare.
 
 ## 6. ~~Verifică plugin-ul Obsidian Git~~ — confirmat instalat (2026-08-19)
 
