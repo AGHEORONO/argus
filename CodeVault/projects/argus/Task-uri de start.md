@@ -186,6 +186,52 @@ print(s)
 
 ---
 
+## T-09 — Validare de poze la ingestie (bibliotecă)
+
+**Obiectiv**: `app/backend/ingest.py` — dat un set de poze de zbor, spune dacă merită trimis la procesare, și dacă nu, de ce.
+
+**Fă**: `read_photo_metadata` (EXIF: GPS, altitudine, focală, senzor, dată), `blur_score` (varianța Laplacianului pe grayscale redimensionat), `ground_footprint_m` + `estimate_overlap` (suprapunere din distanța GPS și footprint), `validate_flight_photos` (raport per poză + verdict). Praguri ca parametri cu implicite în `DEFAULTS`, niciodată constante în mijlocul logicii. Fișier corupt → marcat `unreadable`, nu excepție.
+
+**Fixture-uri**: `tests/photo_fixtures.py` generează seturi sintetice de JPEG cu EXIF GPS scris — clar/neclar, cu/fără GPS, spacing mic/mare. Fără binare comise în repo.
+
+**Check**: `python -m pytest tests/test_ingest.py -v`
+
+**Terminat când**: un set cu poze proaste e respins cu motiv clar, și același set trece cu prag suprascris — dovadă că pragurile chiar sunt reglabile.
+
+**Rollback**: `rm app/backend/ingest.py tests/photo_fixtures.py tests/test_ingest.py`
+
+---
+
+## T-10 — Ingestia expusă prin API
+
+**Obiectiv**: pozele ajung la backend și raportul de validare se persistă.
+
+**Fă**: `POST /flights/{id}/photos` (multipart, nume de fișier sanitizate — doar basename, altfel se poate scrie în afara directorului), `POST /flights/{id}/validate` (praguri suprascriabile prin query params), `GET /flights/{id}/validation`. Coloană nouă `validation TEXT` prin bucla de migrare care există deja în `init_db()`, nu alt mecanism.
+
+**Check**: `python -m pytest tests/test_ingest_api.py tests/test_main.py -v` — al doilea fișier trebuie să treacă neschimbat, ca dovadă că nu s-a stricat nimic existent.
+
+**Terminat când**: trimiți un set de poze, primești raportul, îl regăsești la GET.
+
+**Rollback**: `git checkout app/backend/main.py && rm tests/test_ingest_api.py`
+
+---
+
+## T-11 — Panou de ingestie în frontend
+
+**Obiectiv**: verdictul de validare vizibil în interfață, nu doar în `curl`.
+
+**Fă**: selector de fișiere multiple + zonă de drag-and-drop, upload, validare, raport (verdict ACCEPTED/REJECTED, motive, sumar, tabel per poză).
+
+**Constrângere**: specificația de accesibilitate se ia de la `accessibility-lead` **înainte** de implementare, nu ca review după. Drag-and-drop-ul trebuie să aibă echivalent complet la tastatură, verdictul nu se transmite doar prin culoare, iar rezultatul se anunță prin live region.
+
+**Check**: revizuit de `accessibility-lead` după implementare, plus test manual de tastatură (Tab prin tot panoul, fără mouse).
+
+**Terminat când**: încarci un set prost din interfață și vezi de ce a fost respins, folosind doar tastatura.
+
+**Rollback**: `git checkout app/frontend/src/App.jsx app/frontend/src/index.css`
+
+---
+
 ## Ce raportează la final
 
 Pentru verificarea finală: ce task-uri au trecut (cu output-ul checkurilor), cifrele măsurate (recall T-05, timpii T-04/T-05/T-06), ce s-a blocat și la ce pas, orice decizie ad-hoc luată în timpul execuției care nu era deja în [[Decizii]] — astea sunt exact punctele de verificat, nu de presupus că sunt corecte.

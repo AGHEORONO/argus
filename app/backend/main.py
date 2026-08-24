@@ -3,17 +3,34 @@
 from contextlib import asynccontextmanager
 import json
 import os
+import shutil
 import sqlite3
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.backend.detect import detect_changes
+from app.backend.ingest import validate_flight_photos
 from app.backend.tiles import router as tiles_router
 
 DB_PATH = "data/argus.db"
+
+
+def flight_dir(flight_id: str, *parts: str) -> str:
+    """Build a path inside data/flights/<flight_id>, refusing ids that escape it.
+
+    flight_id arrives from the URL and was previously joined into a filesystem path
+    unchecked; ".." or a separator would have written outside the flights directory.
+    """
+    if (
+        not flight_id
+        or flight_id in (".", "..")
+        or os.path.basename(flight_id.replace("\\", "/")) != flight_id
+    ):
+        raise HTTPException(status_code=400, detail="Invalid flight id")
+    return os.path.join("data", "flights", flight_id, *parts)
 
 
 def get_db() -> sqlite3.Connection:
@@ -38,6 +55,7 @@ def init_db():
                 after_path TEXT,
                 result TEXT,
                 error_message TEXT,
+                validation TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -50,6 +68,7 @@ def init_db():
             ("after_path", "TEXT"),
             ("result", "TEXT"),
             ("error_message", "TEXT"),
+            ("validation", "TEXT"),
             ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
             ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
         ]:
@@ -152,20 +171,20 @@ async def upload_flight(
 ):
     """Create a new flight entry with uploaded before and after GeoTIFFs."""
     fid = flight_id or f"flight_{uuid.uuid4().hex[:8]}"
-    flight_dir = os.path.join("data", "flights", fid)
-    os.makedirs(flight_dir, exist_ok=True)
+    target_dir = flight_dir(fid)
+    os.makedirs(target_dir, exist_ok=True)
 
     before_path = None
     after_path = None
 
     if before:
-        before_path = os.path.join(flight_dir, "before.tif")
+        before_path = os.path.join(target_dir, "before.tif")
         with open(before_path, "wb") as f:
             content = await before.read()
             f.write(content)
 
     if after:
-        after_path = os.path.join(flight_dir, "after.tif")
+        after_path = os.path.join(target_dir, "after.tif")
         with open(after_path, "wb") as f:
             content = await after.read()
             f.write(content)
@@ -191,6 +210,129 @@ async def upload_flight(
         "before_path": before_path,
         "after_path": after_path,
     }
+
+
+@app.post("/flights/{flight_id}/photos")
+async def upload_flight_photos(
+    flight_id: str,
+    files: List[UploadFile] = File(...),
+):
+    """Save raw drone flight photos into the flight photos directory."""
+    photos_dir = flight_dir(flight_id, "photos")
+    os.makedirs(photos_dir, exist_ok=True)
+
+    saved_filenames: List[str] = []
+    for file in files:
+        raw_name = file.filename or ""
+        cleaned = os.path.basename(raw_name.replace("\\", "/"))
+        if not cleaned or cleaned in (".", ".."):
+            safe_filename = f"photo_{uuid.uuid4().hex[:8]}.jpg"
+        else:
+            safe_filename = cleaned
+
+        target_path = os.path.join(photos_dir, safe_filename)
+        with open(target_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        saved_filenames.append(safe_filename)
+
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO flights (id, status)
+            VALUES (?, 'pending')
+            ON CONFLICT(id) DO UPDATE SET
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (flight_id,),
+        )
+        conn.commit()
+
+    return {
+        "flight_id": flight_id,
+        "saved": len(saved_filenames),
+        "filenames": saved_filenames,
+    }
+
+
+@app.post("/flights/{flight_id}/validate")
+def validate_flight(
+    flight_id: str,
+    min_blur_score: Optional[float] = None,
+    min_overlap: Optional[float] = None,
+    max_bad_fraction: Optional[float] = None,
+):
+    """Validate flight photos for blur, metadata, and coverage overlap."""
+    with get_db() as conn:
+        cursor = conn.execute("SELECT id FROM flights WHERE id = ?", (flight_id,))
+        row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Flight '{flight_id}' not found")
+
+    photos_dir = flight_dir(flight_id, "photos")
+    if not os.path.exists(photos_dir):
+        raise HTTPException(
+            status_code=400,
+            detail=f"No photos found for flight '{flight_id}'",
+        )
+
+    filenames = sorted([
+        f for f in os.listdir(photos_dir)
+        if os.path.isfile(os.path.join(photos_dir, f))
+    ])
+    if not filenames:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No photos found for flight '{flight_id}'",
+        )
+
+    paths = [os.path.join(photos_dir, f) for f in filenames]
+
+    overrides: Dict[str, Any] = {}
+    if min_blur_score is not None:
+        overrides["min_blur_score"] = min_blur_score
+    if min_overlap is not None:
+        overrides["min_overlap"] = min_overlap
+    if max_bad_fraction is not None:
+        overrides["max_bad_fraction"] = max_bad_fraction
+
+    report = validate_flight_photos(paths, **overrides)
+    report_json = json.dumps(report)
+
+    with get_db() as conn:
+        conn.execute(
+            """
+            UPDATE flights
+            SET validation = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (report_json, flight_id),
+        )
+        conn.commit()
+
+    return report
+
+
+@app.get("/flights/{flight_id}/validation")
+def get_flight_validation(flight_id: str):
+    """Retrieve saved validation report for a flight."""
+    with get_db() as conn:
+        cursor = conn.execute(
+            "SELECT id, validation FROM flights WHERE id = ?",
+            (flight_id,),
+        )
+        row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Flight '{flight_id}' not found")
+
+    if not row["validation"]:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Flight '{flight_id}' has not been validated yet",
+        )
+
+    return json.loads(row["validation"])
 
 
 @app.post("/flights/{flight_id}/process")
