@@ -6,7 +6,7 @@ type: todo
 
 # De făcut
 
-Proiect: [[Argus Custode]]. Tot ce a rămas deschis la finalul sesiunii de azi (2026-08-17), ca să nu se piardă până la reluare — pe orice mașină. Ordonate aproximativ după cât de mult contează.
+Proiect: [[Argus Custode]]. Tot ce a rămas deschis la finalul sesiunii de azi (2026-08-17), ca să nu se piardă până la reluare — pe orice mașină. Ordonate aproximativ după cât de mult contează. La 2026-08-25 a rămas deschis doar punctul 7 (stretch).
 
 ## 1. ~~Faza 7 — deployment real~~ — LIVE, verificat independent (2026-08-21)
 
@@ -21,13 +21,15 @@ De reținut pentru viitor: `VITE_API_BASE` trebuie adăugat separat pe Productio
 
 Traseu complet: 3/4 (17 aug, neverificat/nereprodus) → 2/4 (19 aug, verificare independentă pe desktop, `top_n=20`) → 3/4 (`top_n=50`, tot fără zona de vegetație) → **4/4** (21 aug, după downsampling-ul din D-010 — zona de vegetație a devenit detectabilă la rezoluția redusă, efect secundar neplanificat). Verificat riguros cu `detect_changes()` la parametrii impliciți din cod, pe fișierele exact ca în producție. Nu s-a mai investigat *de ce* rezoluția mai mică ajută (posibil netezire/reducere zgomot din resampling) — funcțional, e rezolvat.
 
-## 3. T-08 — sliderul, testat doar prin code review
+## 3. ~~T-08 — sliderul~~ — verificat mecanic, 0 cereri (2026-08-25)
 
-Am confirmat prin citirea codului că `setPaintProperty` nu poate face cereri de rețea prin design (MapLibre GL), dar **nu am rulat testul manual cerut de task** (DevTools → Network, mișcat sliderul, verificat 0 cereri noi) — n-am avut browser la dispoziție. Merită 2 minute de test real înainte să declari T-08 complet verificat.
+Testul cerut de task s-a făcut, doar nu din DevTools: extensia Chrome nu era conectată, așa că a rulat Playwright headless pe frontend-ul de producție, numărând cererile programatic. Drag realist (41 de evenimente de mișcare, 8 secunde, slider 0.5 → 0.95): **0 cereri de rețea noi**, dintre care 0 `/tiles/` și 0 XHR/fetch. Cele 16 cereri `/tiles/` de la încărcare confirmă că harta era vie în timpul drag-ului. Vezi [[Jurnal]] 2026-08-25.
 
-## 4. Decizii pierdute la revert, nerescrise
+## 4. ~~Decizii pierdute la revert~~ — rescrise ca D-012…D-015 (2026-08-25)
 
-D-008…D-011 originale (COG vs. pre-tiling, evaluare pe adevăr sintetic, verificare mecanică, licența AGPL a ODM) au fost șterse la revert-ul commit-ului `d24a97f` și nu au fost rescrise — deși tot ce descriau chiar s-a implementat între timp (COG la T-06, perechea sintetică la T-03). `D-008` există acum din nou în [[Decizii]], dar cu alt conținut (seed pe disc efemer Render). Pur documentație lipsă, nu blochează codul.
+Rescrise ca **D-012…D-015** în [[Decizii]] (sloturile D-008…D-011 fuseseră între timp refolosite pentru alte decizii, deci nu s-au atins). Fiecare intrare e marcată explicit ca rescrisă după revert-ul `d24a97f`.
+
+Descoperit pe parcurs: și `Î-05` (licența AGPL a ODM) fusese pierdut la același revert, deși era referențiat din trei fișiere. Adăugat în [[Intrebari deschise]].
 
 ## 5. ~~Curățenie cosmetică~~ — cauza reală reparată (2026-08-21)
 

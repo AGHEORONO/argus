@@ -68,3 +68,26 @@ Implicit `top_n=20` → `50` în `detect_changes()`, `run_detection_job()`, seed
 **De ce**: implicit, Vercel pune SSO protection pe toate deploy-urile unui proiect de tip echipă (`ssoProtection.deploymentType: all_except_custom_domains`) — inclusiv producție. Contrazicea direct obiectivul Fazei 7 („cineva deschide un link, vede demo-ul, fără login"). Verificat înainte și după cu `curl`: înainte, 302 către `vercel.com/sso-api`; după, 200 direct.
 **Consecință**: oricine cu link-ul vede demo-ul, inclusiv API-ul de backend din spate (deja fără protecție, CORS deschis `allow_origins=["*"]`). Acceptabil pentru un proiect de practică cu date sintetice publice; de reconsiderat dacă la un moment dat conține date reale sensibile ale firmei.
 
+## D-012 — COG cu tiling dinamic, nu pre-tiling în piramidă de fișiere PNG (2026-08-17)
+
+Rasterele sunt stocate ca Cloud Optimized GeoTIFF (`build_cog` cu `rio-cogeo`, profil `deflate`) și tile-urile XYZ sunt generate la cerere de backend din COG (`app/backend/tiles.py`, cu cache de dataset și Pillow), în loc să fie pre-generat un arbore de tile-uri PNG pe disc. *(Rescrisă după pierderea la revert-ul commit-ului `d24a97f`.)*
+**De ce**: pre-tiling-ul înseamnă mii de fișiere mici, timp de generare la fiecare raster nou și spațiu pe disc multiplicat; COG-ul are deja overview-uri interne și permite citire pe intervale, deci un singur fișier acoperă toate nivelurile de zoom. În plus, pe disc efemer (Render free tier) un singur fișier se re-generează mult mai simplu decât un arbore de directoare.
+**Consecință**: costul se mută de la stocare la CPU per cerere de tile, atenuat de cache-ul de dataset.
+
+## D-013 — Evaluare pe adevăr sintetic, nu pe apreciere vizuală (2026-08-17)
+
+Perechea before/after este generată programatic (`generate_synthetic_pair` în `app/backend/provision.py`), cu zone de schimbare injectate la coordonate cunoscute, și adevărul de referință scris în `data/reference/truth.geojson`. Calitatea detecției se măsoară ca recall pe aceste zone cunoscute. *(Rescrisă după pierderea la revert-ul commit-ului `d24a97f`.)*
+**De ce**: fără adevăr cunoscut, „merge bine" e o părere. Cu perechea sintetică există o cifră reproductibilă (câte zone din adevăr apar în top-N candidați), care poate fi comparată între configurații și între mașini.
+**Consecință**: cifra măsoară doar tipurile de schimbare injectate, nu performanța pe date reale de zbor; e o limită inferioară utilă, nu o validare finală.
+
+## D-014 — Verificare mecanică înainte de a declara un task terminat (2026-08-17)
+
+Nicio fază sau task nu este declarat gata pe baza citirii codului sau a unui status API; trebuie o dovadă rulată (comandă, output, cifră) notată în [[Jurnal]]. *(Rescrisă după pierderea la revert-ul commit-ului `d24a97f`.)*
+**De ce**: pe 2026-08-17 un rezultat de recall a fost raportat fără să fi fost reprodus și ulterior nu s-a mai confirmat la re-verificare. Costul unei verificări e de ordinul minutelor; costul unei afirmații false care se propagă în decizii ulterioare e mult mai mare.
+**Consecință**: fiecare intrare din [[Jurnal]] are o secțiune de output verificat.
+
+## D-015 — Licența AGPL a OpenDroneMap, clarificată înainte de Faza 2 (2026-08-17)
+
+ODM se folosește ca proces separat, rulat în Docker, care produce un ortofotoplan consumat de backend ca fișier; nu se leagă cod ODM în aplicație. Întrebarea de licență rămâne deschisă formal în [[Intrebari deschise]] Î-05 și trebuie clarificată înainte ca Faza 2 să fie livrată către firmă. *(Rescrisă după pierderea la revert-ul commit-ului `d24a97f`.)*
+**De ce**: ODM e AGPL; un serviciu accesibil prin rețea care încorporează cod AGPL poate atrage obligația de a pune la dispoziție sursa. Rularea ca binar separat, cu schimb de fișiere, este modelul care ridică cele mai puține întrebări, dar nu înlocuiește o clarificare explicită.
+**Rămâne deschis**: statutul exact pentru un eventual deployment comercial al firmei.

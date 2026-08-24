@@ -8,6 +8,33 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-25 (T-08 verificat mecanic, decizii pierdute rescrise)
+
+**Făcut**: închise punctele 3 și 4 din [[De facut]].
+
+1. **T-08 — sliderul, testat pe bune, nu doar prin code review.** Extensia Chrome nu era conectată, deci testul s-a făcut cu Playwright headless direct pe frontend-ul de producție (`https://argus-agheoronos-projects.vercel.app`), numărând cererile programatic în loc să le citesc din DevTools. Drag realist: mouse down pe slider, 41 de evenimente de mișcare pe toată lățimea track-ului, 8 secunde, mouse up, apoi 4 secunde de așteptare.
+2. **D-012…D-015 rescrise** în [[Decizii]] (COG cu tiling dinamic, evaluare pe adevăr sintetic, verificare mecanică, licența AGPL a ODM). Scrise de `agy`/Gemini după prompt cu faptele deja verificate în cod; Claude a revizuit și a corectat o referință greșită (`I-05` → `Î-05`).
+3. **Descoperit pe parcurs**: `Î-05` era referențiat din trei fișiere (`De facut`, `Plan de implementare`, noua `D-015`) dar **nu exista** — pierdut la același revert `d24a97f`. Adăugat în [[Intrebari deschise]].
+
+**Check output** (Playwright, frontend de producție):
+```
+Loaded. total requests during load: 27 (of which /tiles/: 16)
+slider value before drag: 0.5
+--- DRAG: 8.0s, 41 move events ---
+slider value after drag: 0.95
+NEW network requests during+after drag: 0
+  of which /tiles/: 0
+  of which XHR/fetch: 0
+RESULT: PASS — zero network requests during slider drag
+```
+Cele 16 cereri `/tiles/` la încărcare confirmă că harta chiar era vie când s-a mișcat sliderul — altfel zero-ul de după n-ar fi dovedit nimic.
+
+**Blocaje**: extensia Claude in Chrome nu e conectată (browser-ul real al utilizatorului nu poate fi condus din sesiune). Nu blochează — Playwright acoperă mai riguros exact ce cerea task-ul.
+
+**Urmează**: rămâne doar punctul 7 din [[De facut]] — stretch: Faza 1 (ingestie pe date reale de zbor) sau Faza 2 (ODM, blocată de [[Intrebari deschise]] Î-05).
+
+---
+
 ## 2026-08-21 (Faza 7 — backend Render, live real de data asta)
 
 **Făcut**: creat serviciul Render (`argus-backend`) direct prin API (owner ID + API key generat de utilizator, deployment Blueprint din `render.yaml`/`Dockerfile`). Trei încercări, fiecare cu eșec real diagnosticat din log-urile API, nu presupus:

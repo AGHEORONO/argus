@@ -35,6 +35,13 @@ Proiect: [[Argus Custode]]. Fiecare necunoscută cu faza pe care o atinge și cu
 **De ce contează**: la o săptămână distanță, diferențele de iluminare și umbre domină semnalul real. La un sezon distanță, vegetația se schimbă natural peste tot și înecă schimbările care contează.
 **Fallback**: prag și dimensiune de patch reglabile, nu constante în cod. Se calibrează când apar date reale.
 
+## Î-05 — Licența AGPL a OpenDroneMap permite folosirea în livrabilul firmei?
+
+**Blochează**: livrarea Fazei 2 către firmă (nu și experimentarea locală).
+**De aflat**: dacă rularea ODM ca proces separat în Docker, cu schimb de fișiere (poze in, ortofotoplan out), ține aplicația în afara obligațiilor AGPL — și dacă firma acceptă oricum o dependență AGPL în lanțul de procesare.
+**De ce contează**: AGPL extinde obligația de a pune la dispoziție sursa și la software accesibil prin rețea, nu doar la cel distribuit. Dacă răspunsul e „nu", Faza 2 are nevoie de alt motor de fotogrammetrie sau de o rulare complet offline, în afara produsului.
+**Fallback**: procesare ODM local/pe mașină dedicată, iar către API se trimit doar rasterele rezultate — vezi [[Decizii]] D-015. Nu rezolvă întrebarea juridică, doar o amână până la o livrare reală.
+
 ---
 
 Când o întrebare primește răspuns, mut-o în [[Decizii]] ca decizie, cu data, și șterge-o de aici.
