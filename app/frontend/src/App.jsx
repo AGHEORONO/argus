@@ -15,6 +15,22 @@ const STATUS_LABELS = {
   failed: 'esuat',
 };
 
+// Number.toFixed produce "0.81", pe care o voce sintetica romaneasca il citeste
+// "zero punct optzeci si unu". In romana separatorul zecimal e virgula.
+const nf2 = new Intl.NumberFormat('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const nf4 = new Intl.NumberFormat('ro-RO', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const fmt2 = (x) => nf2.format(Number(x) || 0);
+const fmt4 = (x) => nf4.format(Number(x) || 0);
+
+// Numeralele romanesti cer particula "de" cand ultimele doua cifre sunt 0 sau intre 20 si 99:
+// "50 de anomalii", dar "15 anomalii".
+const de = (n) => { const r = Math.abs(n) % 100; return (r === 0 || r >= 20) ? 'de ' : ''; };
+const anomaliiText = (n) =>
+  n === 0 ? 'nicio anomalie' : n === 1 ? 'o anomalie' : `${n} ${de(n)}anomalii`;
+const metriText = (n) => (n === 1 ? 'un metru' : `${n} ${de(n)}metri`);
+const metriPatratiText = (n) =>
+  n === 1 ? 'un metru pătrat' : `${n} ${de(n)}metri pătrați`;
+
 const ISSUE_LABELS = {
   blurry: 'Neclare',
   no_gps: 'Fără date GPS',
@@ -26,6 +42,7 @@ export default function App() {
   const mapContainer = useRef(null);
   const mapRef = useRef(null);
   const pollRef = useRef(null);
+  const popupRef = useRef(null);
   const reportHeadingRef = useRef(null);
 
   // Existing states
@@ -141,9 +158,21 @@ export default function App() {
       zoom: DEFAULT_ZOOM,
       maxZoom: 20,
       minZoom: 10,
+      // MapLibre isi eticheteaza singur canvasul si controalele, in engleza. Pagina e
+      // lang="ro", deci o voce romaneasca le-ar pronunta neinteligibil.
+      locale: {
+        'Map.Title': 'Hartă ortofotoplan cu anomalii detectate',
+        'NavigationControl.ZoomIn': 'Mărește harta',
+        'NavigationControl.ZoomOut': 'Micșorează harta',
+        'NavigationControl.ResetBearing': 'Resetează orientarea hărții spre nord',
+        'AttributionControl.ToggleAttribution': 'Afișează atribuirile hărții',
+        'Popup.Close': 'Închide fereastra de detalii',
+      },
     });
 
-    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-left');
+    // 'top-left' le aseza sub .top-header si sub .ingest-panel — vizibil ramanea un fir de
+    // cativa pixeli. Jos-stanga e singura zona pe care niciun panou n-o acopera.
+    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'bottom-left');
 
     map.on('load', () => {
       // 1. Before Raster Layer
@@ -216,11 +245,14 @@ export default function App() {
         if (!e.features || !e.features.length) return;
         const feature = e.features[0];
         const props = feature.properties || {};
-        new maplibregl.Popup()
+        // O singura instanta, refolosita: altfel fiecare clic lasa in urma inca un buton de
+        // inchidere focusabil, la o pozitie imprevizibila in ordinea de tabulare.
+        if (!popupRef.current) popupRef.current = new maplibregl.Popup({ closeOnClick: true });
+        popupRef.current
           .setLngLat(e.lngLat)
           .setHTML(
             `<strong>Anomalie #${props.rank || ''}</strong><br/>` +
-            `Scor: ${Number(props.anomaly_score || 0).toFixed(4)}<br/>` +
+            `Scor: ${fmt4(props.anomaly_score)}<br/>` +
             `Patch: ${props.patch_index || ''}`
           )
           .addTo(map);
@@ -405,7 +437,7 @@ export default function App() {
     // Activarea muta doar camera pe un canvas WebGL — fara acest anunt, controlul nu produce
     // niciun efect perceptibil pentru cine nu vede harta.
     const rank = feature.properties?.rank ?? index + 1;
-    const score = Number(feature.properties?.anomaly_score || 0).toFixed(2);
+    const score = fmt2(feature.properties?.anomaly_score);
     announceStatus(`Harta centrată pe anomalia ${rank}, scor ${score}.`);
     if (!mapRef.current || !feature.geometry) return;
 
@@ -952,7 +984,7 @@ export default function App() {
                           </th>
                           <td>
                             {photo.blur_score !== null && photo.blur_score !== undefined ? (
-                              Number(photo.blur_score).toFixed(2)
+                              fmt2(photo.blur_score)
                             ) : (
                               <>
                                 <span aria-hidden="true">—</span>
@@ -1009,10 +1041,10 @@ export default function App() {
 
         {/* Side Panel: Anomalies Inspector */}
         {anomalies.length > 0 && (
-          <aside className="side-panel" aria-labelledby="anomalies-heading">
+          <section className="side-panel" aria-labelledby="anomalies-heading">
             <div className="panel-header">
-              <h2 id="anomalies-heading">Candidați Anomalii</h2>
-              <span className="anomaly-count-badge" aria-label={`${anomalies.length} candidați`}>
+              <h2 id="anomalies-heading">Anomalii detectate</h2>
+              <span className="anomaly-count-badge" aria-hidden="true">
                 {anomalies.length}
               </span>
             </div>
@@ -1023,27 +1055,27 @@ export default function App() {
                   type="button"
                   className="candidate-item"
                   aria-current={selectedAnomaly === (f.id ?? i) ? 'true' : undefined}
-                  aria-label={`Anomalia ${f.properties?.rank || i + 1}, scor ${Number(
-                    f.properties?.anomaly_score || 0
-                  ).toFixed(2)}. Centrează harta.`}
+                  aria-label={`Anomalia ${f.properties?.rank || i + 1}, scor ${fmt2(
+                    f.properties?.anomaly_score
+                  )}. Centrează harta.`}
                   onClick={() => flyToAnomaly(f, i)}
                 >
                   <span className="candidate-rank">#{f.properties?.rank || i + 1}</span>
                   <span className="candidate-score">
-                    Scor: {Number(f.properties?.anomaly_score || 0).toFixed(4)}
+                    Scor: {fmt4(f.properties?.anomaly_score)}
                   </span>
                 </button>
               ))}
             </div>
-          </aside>
+          </section>
         )}
 
         {/* Floating Bottom Slider */}
-        <div className="slider-widget">
+        <div className="slider-widget" role="group" aria-label="Comparație între zboruri">
           <div className="slider-labels">
-            <span className="label-before">Before (T0)</span>
-            <span className="slider-value">After: {Math.round(opacity * 100)}%</span>
-            <span className="label-after">After (T1)</span>
+            <span className="label-before">Zbor inițial (T0)</span>
+            <span className="slider-value">Zbor curent: {Math.round(opacity * 100)}%</span>
+            <span className="label-after">Zbor curent (T1)</span>
           </div>
           <div className="slider-control-row">
             <input
@@ -1055,8 +1087,8 @@ export default function App() {
               value={opacity}
               onChange={handleSliderChange}
               className="opacity-slider"
-              aria-label="Tranziție între zborul Before și zborul After"
-              aria-valuetext={`After ${Math.round(opacity * 100)}%`}
+              aria-label="Amestec între zborul inițial T0 și zborul curent T1"
+              aria-valuetext={`${Math.round(opacity * 100)}% zbor curent T1, ${100 - Math.round(opacity * 100)}% zbor inițial T0`}
             />
           </div>
         </div>
