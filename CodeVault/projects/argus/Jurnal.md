@@ -8,6 +8,47 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-25 (2) — Faza 1: ingestie și validare de poze, cap-coadă
+
+**Făcut**: T-09, T-10, T-11. Patru agenți `agy`/Gemini în paralel pe contract de API fixat în avans, plus două treceri de `accessibility-lead` (una înainte de a scrie frontendul, una peste codul scris).
+
+- **T-09** `app/backend/ingest.py` — EXIF (GPS, altitudine, focală, senzor), scor de blur ca varianță a Laplacianului pe grayscale redimensionat, suprapunere estimată din distanță haversine și footprint, verdict cu praguri reglabile. Fișier corupt → `unreadable`, fără excepție propagată.
+- **T-10** `POST /flights/{id}/photos`, `POST /flights/{id}/validate`, `GET /flights/{id}/validation`, raport persistat în SQLite prin bucla de migrare existentă.
+- **T-11** panou de ingestie în frontend, cu tot fluxul operabil de la tastatură.
+
+**Check output**:
+```
+pytest tests/                       -> 27 passed
+npm run build                       -> ✓ built
+t11.mjs (Playwright, doar tastatura) -> 24/24
+t11-blockers.mjs                     -> 9/9
+t08.mjs (non-regresie slider)        -> 0 cereri de retea
+```
+
+**Ce n-a mers cu delegarea, notat ca să nu se repete**: trei din patru agenți `agy` au expirat *înainte* să-și vadă propriile teste sau build-uri rulând, deci au raportat fără verificare. Regula D-014 a prins exact ce trebuia — de fiecare dată verificarea a fost făcută de Claude, iar de fiecare dată a găsit ceva.
+
+**Corecții peste ce au produs agenții**:
+- `flight_id` intra nefiltrat în `os.path.join`. Garda adăugată avea la rândul ei o gaură — `os.path.basename("..")` întoarce `".."`, deci trecea. Verificată acum pe 7 intrări ostile (vezi [[Decizii]] D-017).
+- 145 de linii de client ASGI scris de mână, fiindcă `httpx2` lipsea din venv. Șterse; o linie în `requirements.txt` în loc.
+- Citire integrală în memorie la upload → `shutil.copyfileobj`, pentru limita de 512MB de pe Render.
+- `package-lock.json` modificat cu 47 de linii de zgomot de metadate, fără dependențe noi. Revertat.
+- **Diacriticele lipseau din tot panoul** — vina mea, nu a agentului: specificația pe care i-am dat-o era scrisă fără ele ca să evit probleme de encoding în shell, iar el a copiat literal.
+
+**Ce a găsit revizuirea de accesibilitate peste codul scris** — verdict inițial „no-ship", toate confirmate independent înainte de reparare:
+- **C1**: butonul „Reîncearcă" își distrugea propriul focus. `handleRetry` → `handleUpload` → `setApiError(null)` demontează bannerul, inclusiv butonul care avea focusul, în același commit React; `activeElement` cădea pe `<body>`. Reparat mutând focusul *înainte* de demontare.
+- **C2**: butoanele de candidat nu produceau niciun efect perceptibil non-vizual (doar `flyTo` pe un canvas WebGL), iar `selectedAnomaly` era stare declarată și **niciodată folosită**. Acum anunță „Harta centrată pe anomalia N, scor X" și expune `aria-current`.
+- **M1**: anunțul lung al verdictului era preemptat de mutarea focusului pe titlu, la ~16ms. Anunțul a devenit scurt, detaliul e atașat titlului prin `aria-describedby`.
+- Contraste măsurate și confirmate: `.btn-primary` 4.10:1 (prag 4.5), butoanele `aria-disabled` 2.48:1, bordura candidatului 1.19:1, inelul de focus 1.81:1 peste o tilă luminoasă.
+- Blocul `prefers-reduced-motion` suprima o animație inexistentă — nu există niciun `@keyframes` în fișier. Dovadă că fusese scris ca să pară plauzibil, nu derivat din stylesheet-ul real.
+
+**Blocaje**: extensia Claude in Chrome nu e conectată, deci tot ce ține de browser s-a făcut cu Playwright headless. N-a limitat nimic.
+
+**De reținut, spus cinstit**: nimic din Faza 1 n-a atins vreodată o poză reală de dronă. EXIF-ul e scris de noi, deci codul e validat împotriva propriilor presupuneri. Notat în [[Decizii]] D-016 ca prim lucru de verificat când apar date de zbor.
+
+**Urmează**: cea mai mare gaură rămasă nu e în panoul de ingestie, ci în hartă — nu are nume accesibil și niciun echivalent textual, deci poziția anomaliilor e disponibilă exclusiv vizual. Separat: Faza 2 (ODM), blocată de [[Intrebari deschise]] Î-05.
+
+---
+
 ## 2026-08-25 (T-08 verificat mecanic, decizii pierdute rescrise)
 
 **Făcut**: închise punctele 3 și 4 din [[De facut]].

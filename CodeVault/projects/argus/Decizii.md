@@ -91,3 +91,16 @@ Nicio fază sau task nu este declarat gata pe baza citirii codului sau a unui st
 ODM se folosește ca proces separat, rulat în Docker, care produce un ortofotoplan consumat de backend ca fișier; nu se leagă cod ODM în aplicație. Întrebarea de licență rămâne deschisă formal în [[Intrebari deschise]] Î-05 și trebuie clarificată înainte ca Faza 2 să fie livrată către firmă. *(Rescrisă după pierderea la revert-ul commit-ului `d24a97f`.)*
 **De ce**: ODM e AGPL; un serviciu accesibil prin rețea care încorporează cod AGPL poate atrage obligația de a pune la dispoziție sursa. Rularea ca binar separat, cu schimb de fișiere, este modelul care ridică cele mai puține întrebări, dar nu înlocuiește o clarificare explicită.
 **Rămâne deschis**: statutul exact pentru un eventual deployment comercial al firmei.
+
+## D-016 — Suprapunerea se estimează din GPS și footprint, nu din potrivire de trăsături (2026-08-25)
+
+`estimate_overlap()` calculează fracția de suprapunere dintre două poze consecutive din distanța haversine între pozițiile GPS și lățimea de teren acoperită (`ground_footprint_m()` = altitudine × lățime senzor / focală). Nu se face potrivire de trăsături între imagini.
+**De ce**: potrivirea de trăsături costă secunde per pereche și ar transforma validarea „de 5 secunde la intrare" exact în lucrul pe care validarea trebuie să-l evite. EXIF-ul de dronă are deja tot ce trebuie: GPS, altitudine, focală, echivalent 35mm. Verificat pe optica unui DJI Phantom 4 (focală 8.8 mm, echivalent 24 mm → senzor 13.2 mm): la 90 m altitudine iese footprint de 135.0 m, iar la 12 m între poze, suprapunere 0.911.
+**Consecință**: e o aproximare pe o singură axă, folosind lățimea footprint-ului indiferent de direcția de zbor, și cade complet fără GPS (întoarce `None`, poza primește `no_gps`, nu o cifră inventată). Suficient ca să prinzi un zbor cu spacing greșit; insuficient ca să validezi geometria fină a unui bloc fotogrammetric.
+**Rămâne deschis**: nu a fost testată niciodată pe o poză reală de dronă — doar pe fixture-uri sintetice cu EXIF scris de noi. Prima dată când apar date reale de zbor, primul lucru de verificat e că tag-urile EXIF chiar se citesc așa cum presupune codul.
+
+## D-017 — `flight_id` sanitizat înainte de a atinge sistemul de fișiere (2026-08-25)
+
+`flight_dir()` respinge `.`, `..` și orice `flight_id` care conține un separator de cale, înainte ca valoarea să ajungă în `os.path.join`. Aplicat pe toate endpoint-urile care construiesc căi din `flight_id`, nu doar pe cele noi.
+**De ce**: `flight_id` vine din URL sau dintr-un câmp de formular și era băgat direct în calea de pe disc. Backend-ul e public, fără autentificare și cu CORS deschis (vezi [[Decizii]] D-011) — deci oricine putea încerca să scrie în afara directorului `data/flights`. Ruta HTTP normaliza deja majoritatea încercărilor, dar asta e noroc de rutare, nu apărare.
+**Consecință**: ID-urile de zbor sunt limitate la nume simple de director. Verificat pe șapte intrări ostile, inclusiv `..`, `../..`, `a/b`, `a` și șirul gol.

@@ -6,7 +6,7 @@ type: todo
 
 # De făcut
 
-Proiect: [[Argus Custode]]. Tot ce a rămas deschis la finalul sesiunii de azi (2026-08-17), ca să nu se piardă până la reluare — pe orice mașină. Ordonate aproximativ după cât de mult contează. La 2026-08-25 a rămas deschis doar punctul 7 (stretch).
+Proiect: [[Argus Custode]]. Tot ce a rămas deschis la finalul sesiunii de azi (2026-08-17), ca să nu se piardă până la reluare — pe orice mașină. Ordonate aproximativ după cât de mult contează. La 2026-08-25: Faza 1 e implementată; rămân deschise punctul 7 (Faza 2, ODM) și punctul 8 (harta fără echivalent textual).
 
 ## 1. ~~Faza 7 — deployment real~~ — LIVE, verificat independent (2026-08-21)
 
@@ -39,10 +39,16 @@ Nu era o problemă de fișiere individuale (BOM-ul pe `AGENTS.md`/`CLAUDE.md` er
 
 Confirmat de utilizator: Obsidian Git e instalat și funcțional pe mașina principală.
 
-## 7. Stretch, neînceput
+## 7. Stretch
 
-- **Faza 1** — ingestie și validare pe date reale de zbor (blur, overlap, GPS EXIF).
+- **Faza 1** — ~~ingestie și validare~~ **implementată** (T-09, T-10, T-11, 2026-08-25): validare de blur, GPS EXIF și suprapunere, expusă prin API și prin panou de frontend operabil integral de la tastatură. **Rămâne**: n-a rulat niciodată pe poze reale de dronă — EXIF-ul e scris de noi. Vezi [[Decizii]] D-016.
 - **Faza 2** — fotogrammetrie cu OpenDroneMap (Docker, ore de procesare, licență AGPL de clarificat — vezi [[Intrebari deschise]] Î-05).
+
+## 8. Harta n-are echivalent textual (nou, 2026-08-25)
+
+Ieșit la revizuirea de accesibilitate a Fazei 1, dar e o problemă mai veche și mai mare decât panoul de ingestie: `<div id="map">` n-are nume accesibil, n-are rol și n-are nicio alternativă textuală. Poziția geografică a fiecărei anomalii — adică rezultatul central al aplicației — e disponibilă exclusiv vizual. Lista de candidați dă rang și scor, niciodată locația.
+
+Cineva care nu vede harta poate parcurge tot fluxul de ingestie, dar nu poate consuma niciun rezultat de detecție. Netratat, doar înregistrat.
 
 ---
 
