@@ -46,8 +46,11 @@ def resolve_layer_path(layer: str) -> Optional[str]:
     candidates = [
         f"data/reference/{layer}.cog.tif",
         f"data/reference/{layer}.tif",
-        f"data/flights/{layer}/{layer}.cog.tif",
-        f"data/flights/{layer}/{layer}.tif",
+        # Forma "<flight_id>/<before|after>", folosita de ruta pe zbor. Varianta veche
+        # "<flight_id>/<flight_id>.cog.tif" nu era produsa de nimic — uploadul scrie
+        # before.tif/after.tif — deci tile-urile pentru zboruri urcate nu functionau.
+        os.path.join("data", "flights", f"{layer}.cog.tif"),
+        os.path.join("data", "flights", f"{layer}.tif"),
     ]
     for path in candidates:
         if os.path.exists(path):
@@ -121,12 +124,33 @@ def get_tile(layer: str, z: int, x: int, y: int) -> bytes:
         return EMPTY_TILE_PNG
 
 
-@router.get("/tiles/{layer}/{z}/{x}/{y}.png")
-def render_tile(layer: str, z: int, x: int, y: int):
-    """Serve raster tiles for map clients with low latency."""
-    png_bytes = get_tile(layer, z, x, y)
+def _tile_response(png_bytes: bytes) -> Response:
     return Response(
         content=png_bytes,
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=86400"},
     )
+
+
+# Ruta pe zbor sta INAINTEA celei generice: literalul "flights" nu se poate confunda cu un
+# nume de layer, deci nu exista ambiguitate de rutare intre cele doua.
+@router.get("/tiles/flights/{flight_id}/{layer}/{z}/{x}/{y}.png")
+def render_flight_tile(flight_id: str, layer: str, z: int, x: int, y: int):
+    """Serve raster tiles for one uploaded flight's own before/after imagery."""
+    if layer not in ("before", "after"):
+        return _tile_response(EMPTY_TILE_PNG)
+    # Numele de fisier se construieste din flight_id, deci se aplica aceleasi restrictii
+    # ca la restul cailor: fara separatori, fara '.' sau '..'.
+    if (
+        not flight_id
+        or flight_id in (".", "..")
+        or os.path.basename(flight_id.replace("\\", "/")) != flight_id
+    ):
+        return _tile_response(EMPTY_TILE_PNG)
+    return _tile_response(get_tile(os.path.join(flight_id, layer), z, x, y))
+
+
+@router.get("/tiles/{layer}/{z}/{x}/{y}.png")
+def render_tile(layer: str, z: int, x: int, y: int):
+    """Serve raster tiles for map clients with low latency."""
+    return _tile_response(get_tile(layer, z, x, y))

@@ -3,6 +3,7 @@
 from contextlib import asynccontextmanager
 import json
 import os
+import logging
 import shutil
 import sqlite3
 import uuid
@@ -88,6 +89,8 @@ async def lifespan(app: FastAPI):
     yield
 
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(
     title="Argus Custode API",
     description="Drone orthophoto change detection and tile server API",
@@ -150,6 +153,15 @@ def run_detection_job(flight_id: str, before_path: str, after_path: str, top_n: 
             )
             conn.commit()
 
+        # Tile-urile se servesc din COG, si pana acum se construiau doar pentru rasterele
+        # demo — imaginile unui zbor urcat nu ajungeau niciodata pe harta. Se construiesc
+        # dupa detectie, nu la upload, ca sa nu blocheze cererea de incarcare.
+        try:
+            build_flight_cogs(flight_id, before_path, after_path)
+        except Exception as cog_exc:
+            # Detectia a reusit; lipsa tile-urilor nu trebuie sa transforme zborul in esec.
+            logger.warning("COG build failed for flight %s: %s", flight_id, cog_exc)
+
     except Exception as exc:
         with get_db() as conn:
             conn.execute(
@@ -161,6 +173,51 @@ def run_detection_job(flight_id: str, before_path: str, after_path: str, top_n: 
                 (str(exc), flight_id),
             )
             conn.commit()
+
+
+def build_flight_cogs(flight_id: str, before_path: str, after_path: str):
+    """Build tile-servable COGs for an uploaded flight, downsampling to fit memory."""
+    from app.backend.provision import MAX_DEMO_DIM, build_cog, downsample_if_needed
+
+    for layer, src in (("before", before_path), ("after", after_path)):
+        dst = flight_dir(flight_id, f"{layer}.cog.tif")
+        if os.path.exists(dst):
+            continue
+        downsample_if_needed(src, MAX_DEMO_DIM)
+        build_cog(src, dst)
+        logger.info("Built %s", dst)
+
+
+@app.get("/flights")
+def list_flights():
+    """List every known flight, newest first, with what each one has available."""
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, status, before_path, after_path, error_message, updated_at,
+                   result IS NOT NULL AS has_result,
+                   validation IS NOT NULL AS has_validation
+            FROM flights
+            ORDER BY updated_at DESC
+            """
+        ).fetchall()
+
+    flights = []
+    for r in rows:
+        fid = r["id"]
+        flights.append({
+            "id": fid,
+            "status": r["status"],
+            "updated_at": r["updated_at"],
+            "has_result": bool(r["has_result"]),
+            "has_validation": bool(r["has_validation"]),
+            # Harta poate afisa zborul doar daca exista COG-urile lui, nu doar rasterele brute.
+            "has_tiles": all(
+                os.path.exists(os.path.join("data", "flights", fid, f"{layer}.cog.tif"))
+                for layer in ("before", "after")
+            ) or fid == "test",
+        })
+    return {"flights": flights}
 
 
 @app.post("/flights")
@@ -352,25 +409,29 @@ def process_flight(
     before_path = row["before_path"] if row else None
     after_path = row["after_path"] if row else None
 
-    # Check defaults if not set in DB
+    # Fall back only to THIS flight's own files on disk. Never to the demo reference
+    # rasters: substituting them silently would report detections computed on somebody
+    # else's imagery as if they were this flight's result.
     if not before_path or not os.path.exists(before_path):
-        flight_before = os.path.join("data", "flights", flight_id, "before.tif")
-        if os.path.exists(flight_before):
-            before_path = flight_before
-        elif os.path.exists("data/reference/before.tif"):
-            before_path = "data/reference/before.tif"
+        candidate = flight_dir(flight_id, "before.tif")
+        before_path = candidate if os.path.exists(candidate) else None
 
     if not after_path or not os.path.exists(after_path):
-        flight_after = os.path.join("data", "flights", flight_id, "after.tif")
-        if os.path.exists(flight_after):
-            after_path = flight_after
-        elif os.path.exists("data/reference/after.tif"):
-            after_path = "data/reference/after.tif"
+        candidate = flight_dir(flight_id, "after.tif")
+        after_path = candidate if os.path.exists(candidate) else None
 
     if not before_path or not after_path:
+        missing = []
+        if not before_path:
+            missing.append("before.tif")
+        if not after_path:
+            missing.append("after.tif")
         raise HTTPException(
             status_code=400,
-            detail="Before or after raster files not found for this flight",
+            detail=(
+                f"Flight '{flight_id}' is missing {' and '.join(missing)}. "
+                "Upload both rasters to POST /flights before processing."
+            ),
         )
 
     # Upsert flight record in database
