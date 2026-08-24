@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
+import { bounds as anomalyBounds } from './geo';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000';
 const DEFAULT_CENTER = [-78.43072, 0.01334];
@@ -36,6 +37,11 @@ export default function App() {
 
   // Ingest panel states
   const [flightId, setFlightId] = useState('test');
+  // Zborul afisat pe harta e separat de cel folosit la ingestie: poti valida poze pentru un
+  // zbor nou in timp ce te uiti la rezultatele altuia.
+  const [flights, setFlights] = useState([]);
+  const [viewedFlight, setViewedFlight] = useState('test');
+  const [isSwitching, setIsSwitching] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -92,6 +98,19 @@ export default function App() {
       window.removeEventListener('dragover', block);
       window.removeEventListener('drop', block);
     };
+  }, []);
+
+  const loadFlightList = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/flights`);
+      if (res.ok) setFlights((await res.json()).flights || []);
+    } catch {
+      // Lista e o comoditate: daca nu vine, harta ramane pe zborul curent.
+    }
+  };
+
+  useEffect(() => {
+    loadFlightList();
   }, []);
 
   // Focus report heading after report is rendered
@@ -236,6 +255,78 @@ export default function App() {
     }
   };
 
+  // URL-ul de tile difera intre demo (rasterele de referinta) si un zbor urcat, care isi are
+  // propriile COG-uri sub data/flights/<id>/.
+  const tileUrl = (fid, layer) =>
+    fid === 'test'
+      ? `${API_BASE}/tiles/${layer}/{z}/{x}/{y}.png`
+      : `${API_BASE}/tiles/flights/${encodeURIComponent(fid)}/${layer}/{z}/{x}/{y}.png`;
+
+  const switchViewedFlight = async (fid) => {
+    if (!fid || fid === viewedFlight || isSwitching) return;
+    setIsSwitching(true);
+    setViewedFlight(fid);
+    setAnomalies([]);
+    setSelectedAnomaly(null);
+    announceStatus(`Se încarcă zborul ${fid}.`);
+
+    const map = mapRef.current;
+    if (map) {
+      for (const layer of ['before', 'after']) {
+        const src = map.getSource(`${layer}-source`);
+        if (src && src.setTiles) src.setTiles([tileUrl(fid, layer)]);
+      }
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/flights/${encodeURIComponent(fid)}/result`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.result) {
+          applyGeoJsonResult(data.result, true);
+          const n = data.result.features?.length || 0;
+          setStatus(`Zbor ${fid}: detecție finalizată`);
+          announceStatus(`Zborul ${fid} a fost încărcat. ${n} anomalii detectate.`);
+        } else {
+          setStatus(`Zbor ${fid}: fără rezultat`);
+          announceStatus(`Zborul ${fid} a fost încărcat, dar nu are încă un rezultat de detecție.`);
+        }
+      } else {
+        setStatus(`Zbor ${fid}: fără rezultat`);
+        announceStatus(`Zborul ${fid} nu are un rezultat de detecție.`);
+      }
+    } catch {
+      announceError('Eroare de rețea la încărcarea zborului. Încercați din nou.');
+    } finally {
+      setIsSwitching(false);
+    }
+  };
+
+  // Descarcarea rezultatului: un topograf vrea GeoJSON-ul in QGIS, nu intr-un panou.
+  const downloadResult = async () => {
+    if (anomalies.length === 0) return;
+    try {
+      const res = await fetch(`${API_BASE}/flights/${encodeURIComponent(viewedFlight)}/result`);
+      if (!res.ok) {
+        announceError('Rezultatul nu a putut fi descărcat. Încercați din nou.');
+        return;
+      }
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data.result, null, 2)], { type: 'application/geo+json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `argus-${viewedFlight}-anomalii.geojson`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      announceStatus(`Fișierul argus-${viewedFlight}-anomalii.geojson a fost descărcat.`);
+    } catch {
+      announceError('Eroare de rețea la descărcare. Încercați din nou.');
+    }
+  };
+
   // Poll backend for anomaly detection result
   const checkAndFetchDetection = async () => {
     try {
@@ -289,12 +380,23 @@ export default function App() {
     }
   };
 
-  const applyGeoJsonResult = (geojson) => {
+  const applyGeoJsonResult = (geojson, recenter = false) => {
     if (mapRef.current && mapRef.current.getSource('anomalies-source')) {
       mapRef.current.getSource('anomalies-source').setData(geojson);
     }
     if (geojson && geojson.features) {
       setAnomalies(geojson.features);
+      // Un zbor urcat poate acoperi cu totul alt loc decat demo-ul, deci camera trebuie mutata
+      // acolo — altfel comuti zborul si vezi o harta goala.
+      if (recenter && mapRef.current) {
+        const b = anomalyBounds(geojson.features);
+        if (b) {
+          mapRef.current.fitBounds(
+            [[b.minLon, b.minLat], [b.maxLon, b.maxLat]],
+            { padding: 60, duration: 0 }
+          );
+        }
+      }
     }
   };
 
@@ -510,6 +612,36 @@ export default function App() {
             <h1>Argus Custode</h1>
             <p>Detecție Anomalii Ortofotoplan Dronă</p>
           </div>
+        </div>
+
+        <div className="flight-switcher">
+          <label htmlFor="view-flight-select" className="switcher-label">
+            Zbor afișat pe hartă
+          </label>
+          <select
+            id="view-flight-select"
+            className="switcher-select"
+            value={viewedFlight}
+            onChange={(e) => switchViewedFlight(e.target.value)}
+            aria-busy={isSwitching}
+          >
+            {flights.length === 0 && <option value="test">test (demo)</option>}
+            {flights.map((f) => (
+              <option key={f.id} value={f.id} disabled={!f.has_tiles && !f.has_result}>
+                {f.id === 'test' ? 'test (demo)' : f.id}
+                {f.has_result ? '' : ' — fără rezultat'}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="btn btn-secondary btn-download"
+            onClick={downloadResult}
+            aria-disabled={anomalies.length === 0}
+          >
+            Descarcă GeoJSON
+            <span className="sr-only"> pentru zborul {viewedFlight}</span>
+          </button>
         </div>
 
         <div className="header-status">
