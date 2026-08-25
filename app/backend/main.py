@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 import json
 import os
 import logging
-import shutil
 import sqlite3
 import uuid
 from typing import Any, Dict, List, Optional
@@ -16,7 +15,9 @@ from app.backend.detect import detect_changes
 from app.backend.ingest import validate_flight_photos
 from app.backend.tiles import router as tiles_router
 
-DB_PATH = "data/argus.db"
+# Testele importau get_db si scriau in baza de date de productie, lasand un zbor fantoma
+# vizibil in API-ul public si, fiindca lista e ordonata dupa updated_at, chiar pe primul loc.
+DB_PATH = os.environ.get("ARGUS_DB_PATH", "data/argus.db")
 
 
 def flight_dir(flight_id: str, *parts: str) -> str:
@@ -99,11 +100,16 @@ app = FastAPI(
 )
 
 # Enable CORS for web frontend clients
+# allow_origins=["*"] impreuna cu allow_credentials=True nu trimite "*": Starlette
+# REFLECTA Origin-ul care a cerut, cu Allow-Credentials: true. Adica orice pagina pe care
+# o viziteaza utilizatorul putea sa scripteze backendul si sa citeasca raspunsurile.
+# API-ul nu foloseste cookie-uri sau autentificare, deci nu are nevoie de credentiale.
+_allowed = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=_allowed or ["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -198,6 +204,35 @@ def build_flight_cogs(flight_id: str, before_path: str, after_path: str):
         logger.info("Built %s", dst)
 
 
+# Fara nicio limita, oricine putea umple discul unui serviciu public. Rasterele se citeau
+# si integral in memorie, pe un tier de 512MB.
+MAX_RASTER_BYTES = int(os.environ.get("MAX_RASTER_MB", "512")) * 1024 * 1024
+MAX_PHOTO_BYTES = int(os.environ.get("MAX_PHOTO_MB", "64")) * 1024 * 1024
+
+
+async def save_upload(upload: UploadFile, dest: str, max_bytes: int) -> str:
+    """Stream an upload to disk, refusing anything over `max_bytes`."""
+    written = 0
+    try:
+        with open(dest, "wb") as fh:
+            while True:
+                chunk = await upload.read(1024 * 1024)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > max_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File exceeds the {max_bytes // (1024 * 1024)} MB limit.",
+                    )
+                fh.write(chunk)
+    except HTTPException:
+        if os.path.exists(dest):
+            os.remove(dest)
+        raise
+    return dest
+
+
 def raster_bounds_wgs84(flight_id: str):
     """Geographic extent of a flight's imagery, as [west, south, east, north].
 
@@ -273,16 +308,18 @@ async def upload_flight(
     after_path = None
 
     if before:
-        before_path = os.path.join(target_dir, "before.tif")
-        with open(before_path, "wb") as f:
-            content = await before.read()
-            f.write(content)
+        before_path = await save_upload(before, os.path.join(target_dir, "before.tif"), MAX_RASTER_BYTES)
 
     if after:
-        after_path = os.path.join(target_dir, "after.tif")
-        with open(after_path, "wb") as f:
-            content = await after.read()
-            f.write(content)
+        after_path = await save_upload(after, os.path.join(target_dir, "after.tif"), MAX_RASTER_BYTES)
+
+    if not before_path and not after_path:
+        # Fara asta, un singur POST fara fisiere si flight_id=test retrograda demo-ul public
+        # la 'pending', ii stergea rezultatul si il lasa mort pana la repornire.
+        raise HTTPException(
+            status_code=400,
+            detail="Provide at least one raster (before and/or after) when creating a flight.",
+        )
 
     with get_db() as conn:
         conn.execute(
@@ -317,6 +354,7 @@ async def upload_flight_photos(
     os.makedirs(photos_dir, exist_ok=True)
 
     saved_filenames: List[str] = []
+    rejected: List[str] = []
     for file in files:
         raw_name = file.filename or ""
         cleaned = os.path.basename(raw_name.replace("\\", "/"))
@@ -325,9 +363,12 @@ async def upload_flight_photos(
         else:
             safe_filename = cleaned
 
+        if not safe_filename.lower().endswith((".jpg", ".jpeg")):
+            rejected.append(safe_filename)
+            continue
+
         target_path = os.path.join(photos_dir, safe_filename)
-        with open(target_path, "wb") as f:
-            shutil.copyfileobj(file.file, f)
+        await save_upload(file, target_path, MAX_PHOTO_BYTES)
         saved_filenames.append(safe_filename)
 
     with get_db() as conn:
@@ -346,6 +387,9 @@ async def upload_flight_photos(
         "flight_id": flight_id,
         "saved": len(saved_filenames),
         "filenames": saved_filenames,
+        # Se raporteaza explicit ce n-a fost acceptat: altfel clientul crede ca a incarcat
+        # zece poze si a incarcat sapte.
+        "rejected": rejected,
     }
 
 

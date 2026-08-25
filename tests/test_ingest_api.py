@@ -141,7 +141,13 @@ def test_get_validation_before_validate(cleanup_flights):
     flight_id = "test_unvalidated_flight_05"
     cleanup_flights.append(flight_id)
 
-    res_create = client.post("/flights", data={"flight_id": flight_id})
+    # POST /flights fara fisiere e respins acum: acel apel retrograda orice zbor existent
+    # la 'pending' si putea fi folosit ca sa opreasca demo-ul public. Zborul se creeaza prin
+    # incarcarea de fotografii, care e calea legitima.
+    res_create = client.post(
+        f"/flights/{flight_id}/photos",
+        files=[("files", ("IMG_0001.jpg", b"placeholder", "image/jpeg"))],
+    )
     assert res_create.status_code == 200
 
     res_unvalidated = client.get(f"/flights/{flight_id}/validation")
@@ -153,9 +159,14 @@ def test_validate_flight_no_photos(cleanup_flights):
     flight_id = "test_empty_flight_06"
     cleanup_flights.append(flight_id)
 
-    # Create flight entry with no photos uploaded
-    res_create = client.post("/flights", data={"flight_id": flight_id})
+    # Se creeaza randul de zbor incarcand o poza, apoi se sterge de pe disc: asta lasa
+    # exact starea testata — zbor cunoscut, fara nicio poza de validat.
+    res_create = client.post(
+        f"/flights/{flight_id}/photos",
+        files=[("files", ("IMG_0001.jpg", b"placeholder", "image/jpeg"))],
+    )
     assert res_create.status_code == 200
+    shutil.rmtree(os.path.join("data", "flights", flight_id, "photos"), ignore_errors=True)
 
     val_res = client.post(f"/flights/{flight_id}/validate")
     assert val_res.status_code == 400
