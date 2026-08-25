@@ -208,6 +208,35 @@ def generate_synthetic_pair():
         json.dump(truth_doc, f, indent=2)
 
 
+def _result_matches_raster(result_json: str) -> bool:
+    """True when a stored detection could have come from the raster currently on disk.
+
+    downsample_if_needed rewrites before.tif in place, but the seed returns early whenever
+    the flight is already 'done' — so after a resolution change the demo kept serving
+    detections computed on a raster that no longer existed. Locally that silently halved
+    recall, from 4 of 4 known changes to 2 of 4, with nothing to indicate anything was wrong.
+    A patch index beyond what the current raster can hold is proof of the mismatch.
+    """
+    try:
+        doc = json.loads(result_json)
+        features = doc.get("features") or []
+        if not features:
+            return False
+        highest = max(f.get("properties", {}).get("patch_index", 0) for f in features)
+        with rasterio.open(BEFORE_PATH) as src:
+            available = (src.width // 32) * (src.height // 32)
+        if highest >= available:
+            logger.info(
+                "Stored demo result references patch %d but the raster holds %d; recomputing.",
+                highest, available,
+            )
+            return False
+        return True
+    except Exception as exc:
+        logger.warning("Could not validate stored demo result (%s); recomputing.", exc)
+        return False
+
+
 def seed_demo_flight(get_db_func):
     """Ensure flight 'test' is present in database and pre-processed for instant demo viewing."""
     ensure_reference_data()
@@ -216,7 +245,7 @@ def seed_demo_flight(get_db_func):
         cursor = conn.execute("SELECT id, status, result FROM flights WHERE id = 'test'")
         row = cursor.fetchone()
 
-        if row and row["status"] == "done" and row["result"]:
+        if row and row["status"] == "done" and row["result"] and _result_matches_raster(row["result"]):
             logger.info("Demo flight 'test' already seeded and done.")
             return
 

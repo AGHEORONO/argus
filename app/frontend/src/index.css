@@ -705,6 +705,10 @@ body, html, #root {
   right: 16px;
   width: min(280px, calc(100% - 32px));
   max-height: calc(100% - 190px);
+  /* overflow:hidden impingea butonul "Vezi lista completa" dincolo de marginea de taiere pe
+     ecrane scunde: devenea invizibil si inaccesibil prin scroll, deci dialogul ramanea fara
+     niciun declansator. */
+  overflow-y: auto;
   background: var(--bg-panel-solid);
   border: 1px solid var(--border-color);
   border-radius: 12px;
@@ -1067,5 +1071,64 @@ dialog.anomalies-sheet::backdrop {
 
   dialog.anomalies-sheet::backdrop {
     background: transparent;
+  }
+}
+
+/* ── Schimbarile cunoscute de referinta ─────────────────────────────────────────── */
+.recall-line {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--verdict-pass);
+}
+
+.known-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.known-toggle-input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: #fde047;
+  flex-shrink: 0;
+}
+
+.known-toggle-input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.9);
+}
+
+.known-toggle label {
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.known-list-prose {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.sheet-subheading {
+  margin: 16px 20px 0;
+  font-size: 14px;
+}
+
+.known-scroll {
+  flex: 0 0 auto;
+  max-height: 32vh;
+}
+
+@media (max-width: 900px) {
+  .side-panel {
+    max-height: none;
   }
 }

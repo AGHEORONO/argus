@@ -260,6 +260,50 @@ def raster_bounds_wgs84(flight_id: str):
     return None
 
 
+# Descrierile vin din generate_synthetic_pair, in engleza. Interfata e in romana, iar o
+# voce sintetica romaneasca citeste "Structure removal" neinteligibil, deci se traduc aici,
+# la sursa, in loc sa fie marcate lang="en" in frontend.
+TRUTH_LABELS_RO = {
+    "Structure removal": "Clădire demolată",
+    "New blue structure/container": "Container albastru nou",
+    "Vegetation clearing": "Defrișare de vegetație",
+    "Excavation trench and mound": "Șanț de excavație",
+}
+
+
+@app.get("/flights/{flight_id}/truth")
+def get_flight_truth(flight_id: str):
+    """Known ground-truth changes for a flight, when the flight is a synthetic pair.
+
+    Only the demo has this: its "after" raster was produced by injecting four changes into
+    a copy of "before", so what changed is known exactly. A real flight has no such file,
+    and saying so plainly is more useful than an empty collection that looks like "nothing
+    changed here".
+    """
+    path = (
+        os.path.join("data", "reference", "truth.geojson")
+        if flight_id == "test"
+        else flight_dir(flight_id, "truth.geojson")
+    )
+    if not os.path.exists(path):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Flight '{flight_id}' has no known ground truth; it is not a synthetic pair.",
+        )
+
+    with open(path, encoding="utf-8") as fh:
+        doc = json.load(fh)
+
+    for i, feature in enumerate(doc.get("features", []), start=1):
+        props = feature.setdefault("properties", {})
+        description = props.get("description", "")
+        props["zone"] = i
+        props["label"] = TRUTH_LABELS_RO.get(description, description)
+    # "crs" a fost scos din RFC 7946; fisierul de pe disc il mai poarta.
+    doc.pop("crs", None)
+    return doc
+
+
 @app.get("/flights")
 def list_flights():
     """List every known flight, newest first, with what each one has available."""
@@ -285,6 +329,13 @@ def list_flights():
             "has_result": bool(r["has_result"]),
             "has_validation": bool(r["has_validation"]),
             # Harta poate afisa zborul doar daca exista COG-urile lui, nu doar rasterele brute.
+            # Anuntat in lista ca frontendul sa nu ceara un fisier despre care stie ca
+            # lipseste: un 404 e o stare asteptata, dar tot polueaza consola browserului.
+            "has_truth": os.path.exists(
+                os.path.join("data", "reference", "truth.geojson")
+                if fid == "test"
+                else os.path.join("data", "flights", fid, "truth.geojson")
+            ),
             "has_tiles": all(
                 os.path.exists(os.path.join("data", "flights", fid, f"{layer}.cog.tif"))
                 for layer in ("before", "after")

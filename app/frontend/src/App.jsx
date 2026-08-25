@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
-import { bounds as anomalyBounds, summarise } from './geo';
+import { bounds as anomalyBounds, summarise, zoneName } from './geo';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000';
 const DEFAULT_CENTER = [-78.43072, 0.01334];
@@ -28,6 +28,10 @@ const de = (n) => { const r = Math.abs(n) % 100; return (r === 0 || r >= 20) ? '
 const anomaliiText = (n) =>
   n === 0 ? 'nicio anomalie' : n === 1 ? 'o anomalie' : `${n} ${de(n)}anomalii`;
 const metriText = (n) => (n === 1 ? 'un metru' : `${n} ${de(n)}metri`);
+const schimbariText = (n) =>
+  n === 0 ? 'nicio schimbare cunoscută'
+  : n === 1 ? 'o schimbare cunoscută'
+  : `${n} ${de(n)}schimbări cunoscute`;
 const metriPatratiText = (n) =>
   n === 1 ? 'un metru pătrat' : `${n} ${de(n)}metri pătrați`;
 
@@ -40,6 +44,22 @@ const ZONE_ARTICLE = {
 const zoneWithArticle = (z) => ZONE_ARTICLE[z] || `de ${z}`;
 
 // Backendul da [vest, sud, est, nord]; geo.js vrea un obiect.
+// Suprapunere pe cutii de incadrare: peticurile sunt dreptunghiuri aliniate, deci un test
+// exact pe poligoane n-ar schimba raspunsul si ar aduce o dependenta.
+const matchKnown = (feature, boxes) => {
+  if (!boxes) return null;
+  const ring = feature?.geometry?.coordinates?.[0] || [];
+  if (!ring.length) return null;
+  const lons = ring.map((q) => q[0]);
+  const lats = ring.map((q) => q[1]);
+  const a = { minLon: Math.min(...lons), maxLon: Math.max(...lons), minLat: Math.min(...lats), maxLat: Math.max(...lats) };
+  return (
+    boxes.find(
+      (b) => a.minLon < b.maxLon && a.maxLon > b.minLon && a.minLat < b.maxLat && a.maxLat > b.minLat
+    ) || null
+  );
+};
+
 const rasterBoundsToBox = (b) =>
   Array.isArray(b) && b.length === 4
     ? { minLon: b[0], minLat: b[1], maxLon: b[2], maxLat: b[3] }
@@ -77,6 +97,11 @@ export default function App() {
   // Intinderea reala a rasterului zborului afisat. Ancoreaza si grila de zone: pe bbox-ul
   // anomaliilor, "nord-vest" ar insemna alt loc la fiecare zbor.
   const [rasterBounds, setRasterBounds] = useState(null);
+  // Adevarul de referinta exista doar pentru perechea sintetica: stim ce s-a schimbat
+  // fiindca noi am injectat schimbarile. Pe un zbor real e null, si asta se SPUNE, nu se
+  // ascunde — tacerea ar face datele absente sa semene cu un scor de zero.
+  const [truth, setTruth] = useState(null);
+  const [showKnown, setShowKnown] = useState(false);
   const sheetRef = useRef(null);
   const sheetHeadingRef = useRef(null);
   const openSheetBtnRef = useRef(null);
@@ -84,6 +109,10 @@ export default function App() {
   // Efectul hartii ruleaza o singura data, inainte ca selectAnomaly sa existe in closure.
   const selectAnomalyRef = useRef(null);
   const viewedFlightRef = useRef('test');
+  // Numele canvasului se rescrie din applyGeoJsonResult si din comutator; ambele au nevoie
+  // de starea curenta fara sa depinda de closure.
+  const showKnownRef = useRef(false);
+  const truthCountRef = useRef(0);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -141,6 +170,61 @@ export default function App() {
       window.removeEventListener('drop', block);
     };
   }, []);
+
+  const loadTruth = async (fid, known) => {
+    // Daca lista de zboruri spune deja ca nu exista adevar de referinta, nu se mai cere:
+    // 404-ul ar fi corect, dar apare ca eroare in consola browserului degeaba.
+    if (known === false) {
+      setTruth(null);
+      mapRef.current?.getSource('truth-source')?.setData({ type: 'FeatureCollection', features: [] });
+      return null;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/flights/${encodeURIComponent(fid)}/truth`);
+      if (res.ok) {
+        const doc = await res.json();
+        setTruth(doc);
+        mapRef.current?.getSource('truth-source')?.setData(doc);
+        return doc;
+      }
+      // 404 e o stare asteptata, nu un esec: un zbor real n-are adevar de referinta.
+      // Rutarea lui catre role="alert" ar striga lupul.
+      setTruth(null);
+      mapRef.current?.getSource('truth-source')?.setData({ type: 'FeatureCollection', features: [] });
+    } catch {
+      setTruth(null);
+    }
+    return null;
+  };
+
+  const recallSentence = (doc, features) => {
+    const zones = doc?.features || [];
+    if (!zones.length) return '';
+    const boxes = zones.map((f) => {
+      const ring = f.geometry?.coordinates?.[0] || [];
+      const lons = ring.map((q) => q[0]);
+      const lats = ring.map((q) => q[1]);
+      return { minLon: Math.min(...lons), maxLon: Math.max(...lons), minLat: Math.min(...lats), maxLat: Math.max(...lats) };
+    });
+    let found = 0;
+    let deepest = 0;
+    boxes.forEach((b) => {
+      const idx = (features || []).findIndex((f) => {
+        const ring = f.geometry?.coordinates?.[0] || [];
+        if (!ring.length) return false;
+        const lons = ring.map((q) => q[0]);
+        const lats = ring.map((q) => q[1]);
+        return Math.min(...lons) < b.maxLon && Math.max(...lons) > b.minLon
+          && Math.min(...lats) < b.maxLat && Math.max(...lats) > b.minLat;
+      });
+      if (idx >= 0) { found += 1; deepest = Math.max(deepest, idx + 1); }
+    });
+    if (found === 0) return 'Nicio schimbare cunoscută de referință nu a fost găsită.';
+    // Recall singur e trivial de pacalit: un detector care coloreaza tot situl scoate 4 din 4.
+    // Rangul celei mai adanci schimbari gasite costa nimic si face cifra onesta.
+    return `${found} din ${zones.length} schimbări cunoscute de referință au fost găsite`
+      + (found === zones.length ? `, toate în primele ${deepest} anomalii după scor.` : '.');
+  };
 
   const loadFlightList = async () => {
     try {
@@ -261,6 +345,16 @@ export default function App() {
         },
       });
 
+      // Conturul statea direct pe fotografie, unde niciun ton nu poate garanta 3:1 fata de
+      // un fundal necunoscut. Un casing inchis dedesubt face ca vecinul liniei sa fie
+      // casingul, nu ortofotoplanul: #f87171 pe #0B1220 da 6.86:1.
+      map.addLayer({
+        id: 'anomalies-casing',
+        type: 'line',
+        source: 'anomalies-source',
+        paint: { 'line-color': '#0B1220', 'line-width': 5, 'line-opacity': 0.9 },
+      });
+
       map.addLayer({
         id: 'anomalies-line',
         type: 'line',
@@ -268,6 +362,36 @@ export default function App() {
         paint: {
           'line-color': '#f87171',
           'line-width': 2.5,
+        },
+      });
+
+      // 4. Schimbarile cunoscute de referinta, desenate PESTE candidati ca sa nu fie
+      // ingropate sub cincizeci de dreptunghiuri. Fara umplere: umplerea rosie a
+      // candidatilor ramane vizibila prin contur, deci suprapunerea se vede ca suprapunere.
+      map.addSource('truth-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+
+      map.addLayer({
+        id: 'truth-casing',
+        type: 'line',
+        source: 'truth-source',
+        layout: { visibility: 'none' },
+        paint: { 'line-color': '#0B1220', 'line-width': 7, 'line-opacity': 0.9 },
+      });
+
+      map.addLayer({
+        id: 'truth-line',
+        type: 'line',
+        source: 'truth-source',
+        layout: { visibility: 'none' },
+        paint: {
+          'line-color': '#FDE047',
+          'line-width': 3,
+          // Linia intrerupta e purtatoare de sens, nu decor: #FDE047 fata de #f87171 da
+          // 2.10:1, sub prag, deci culoarea singura nu distinge cele doua straturi.
+          'line-dasharray': [2, 1.5],
         },
       });
 
@@ -334,6 +458,16 @@ export default function App() {
     setViewedFlight(fid);
     setAnomalies([]);
     setSelectedAnomaly(null);
+    // Fara asta, poligoanele galbene ale demo-ului raman peste imaginile altui zbor si
+    // afirma ceva fals despre el.
+    setTruth(null);
+    setShowKnown(false);
+    if (mapRef.current) {
+      mapRef.current.getSource('truth-source')?.setData({ type: 'FeatureCollection', features: [] });
+      for (const id of ['truth-casing', 'truth-line']) {
+        if (mapRef.current.getLayer(id)) mapRef.current.setLayoutProperty(id, 'visibility', 'none');
+      }
+    }
     announceStatus(`Se încarcă zborul ${fid}.`);
 
     const b = flights.find((f) => f.id === fid)?.bounds || null;
@@ -355,7 +489,12 @@ export default function App() {
           applyGeoJsonResult(data.result, true);
           const n = data.result.features?.length || 0;
           setStatus(`Zbor ${fid}: detecție finalizată`);
-          announceStatus(`Zborul ${fid} a fost încărcat. ${n} anomalii detectate.`);
+          const doc = await loadTruth(fid, flights.find((f) => f.id === fid)?.has_truth);
+          const rec = recallSentence(doc, data.result.features);
+          announceStatus(
+            `Zborul ${fid} a fost încărcat. ${anomaliiText(n)} detectate. ` +
+              (rec || 'Acest zbor nu are schimbări cunoscute de referință, deci acoperirea nu poate fi calculată.')
+          );
         } else {
           setStatus(`Zbor ${fid}: fără rezultat`);
           announceStatus(`Zborul ${fid} a fost încărcat, dar nu are încă un rezultat de detecție.`);
@@ -399,7 +538,43 @@ export default function App() {
   useEffect(() => {
     selectAnomalyRef.current = selectAnomaly;
     viewedFlightRef.current = viewedFlight;
+    showKnownRef.current = showKnown;
+    truthCountRef.current = truth?.features?.length || 0;
   });
+
+  const toggleKnownChanges = (on) => {
+    setShowKnown(on);
+    const map = mapRef.current;
+    if (map) {
+      for (const id of ['truth-casing', 'truth-line']) {
+        // setLayoutProperty, nu adaugare/stergere: stergerea ar reintroduce de fiecare data
+        // problema de ordine a straturilor.
+        if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+      }
+    }
+    const n = truth?.features?.length || 0;
+    // Numele canvasului descrie ce se vede acum: comutatorul schimba asta, deci trebuie
+    // rescris aici, nu doar la incarcarea rezultatului. Nu e live region, deci e usor de uitat.
+    const canvas = mapRef.current?.getCanvas?.();
+    if (canvas) {
+      const base = canvas.getAttribute('aria-label') || '';
+      const fara = base.replace(/\s*\d+[^.]*contur galben întrerupt\.\s*/, ' ');
+      canvas.setAttribute(
+        'aria-label',
+        on
+          ? fara.replace(
+              'Echivalentul în text',
+              `${schimbariText(n)} de referință marcate suplimentar cu contur galben întrerupt. Echivalentul în text`
+            )
+          : fara
+      );
+    }
+    announceStatus(
+      on
+        ? `Cele ${schimbariText(n)} sunt acum afișate pe hartă, cu contur galben întrerupt. Lista lor se află în secțiunea Schimbări cunoscute.`
+        : 'Schimbările cunoscute nu mai sunt afișate pe hartă.'
+    );
+  };
 
   const openSheet = () => {
     const d = sheetRef.current;
@@ -437,6 +612,22 @@ export default function App() {
     [anomalies, rasterBounds]
   );
 
+  // Cutia de incadrare a fiecarei zone cunoscute, pentru testul de suprapunere.
+  const truthBoxes = useMemo(() => {
+    if (!truth?.features?.length) return null;
+    return truth.features.map((f, i) => {
+      const ring = f.geometry?.coordinates?.[0] || [];
+      const lons = ring.map((q) => q[0]);
+      const lats = ring.map((q) => q[1]);
+      return {
+        zone: f.properties?.zone ?? i + 1,
+        label: f.properties?.label || f.properties?.description || `zona ${i + 1}`,
+        minLon: Math.min(...lons), maxLon: Math.max(...lons),
+        minLat: Math.min(...lats), maxLat: Math.max(...lats),
+      };
+    });
+  }, [truth]);
+
   const anomalyRows = useMemo(() => {
     if (!anomalyModel) return [];
     return anomalyModel.items.map((it, i) => {
@@ -450,12 +641,13 @@ export default function App() {
             ? `În zona ${zoneWithArticle(it.zone)} a sitului, la mai puțin de 20 de metri de centru`
             : `În zona ${zoneWithArticle(it.zone)} a sitului, la aproximativ ${metriText(dist)} de centru`,
         groupText: it.clusterId ? `Grupul ${it.clusterId}` : 'Izolată',
+        known: matchKnown(anomalies[i], truthBoxes),
         coordsSpoken:
           `${Math.abs(it.lat).toFixed(6).replace('.', ',')} grade ${it.lat >= 0 ? 'nord' : 'sud'}, ` +
           `${Math.abs(it.lon).toFixed(6).replace('.', ',')} grade ${it.lon >= 0 ? 'est' : 'vest'}`,
       };
     });
-  }, [anomalyModel, anomalies]);
+  }, [anomalyModel, anomalies, truthBoxes]);
 
   const summaryText = useMemo(() => {
     const m = anomalyModel;
@@ -485,6 +677,36 @@ export default function App() {
     return parts.join(' ');
   }, [anomalyModel]);
 
+  // Totul despre adevarul de referinta, intr-un singur loc: randurile tabelului, propozitia
+  // de acoperire si enumerarea in proza. null cand zborul nu e o pereche sintetica.
+  const truthInfo = useMemo(() => {
+    if (!truthBoxes?.length || !anomalyRows.length) return null;
+    const rows = truthBoxes.map((b) => {
+      const hit = anomalyRows.find((r) => r.known && r.known.zone === b.zone) || null;
+      const lon = (b.minLon + b.maxLon) / 2;
+      const lat = (b.minLat + b.maxLat) / 2;
+      const zona = anomalyModel ? zoneName(lon, lat, anomalyModel.bbox) : null;
+      return {
+        ...b,
+        hit,
+        positionText: zona ? `În zona ${zoneWithArticle(zona)} a sitului` : 'Poziție necunoscută',
+      };
+    });
+    const found = rows.filter((r) => r.hit).length;
+    const deepest = rows.reduce((m, r) => (r.hit ? Math.max(m, r.hit.rank) : m), 0);
+    const recall =
+      found === 0
+        ? 'Nicio schimbare cunoscută de referință nu a fost găsită.'
+        : `${found} din ${rows.length} schimbări cunoscute de referință au fost găsite` +
+          (found === rows.length ? `, toate în primele ${deepest} anomalii după scor.` : '.');
+    return {
+      rows,
+      count: rows.length,
+      recall,
+      labels: rows.map((r) => r.label.toLowerCase()).join(', '),
+    };
+  }, [truthBoxes, anomalyRows, anomalyModel]);
+
   const selectedDetail = useMemo(
     () => anomalyRows.find((r) => r.rank === selectedAnomaly) || null,
     [anomalyRows, selectedAnomaly]
@@ -499,9 +721,14 @@ export default function App() {
     return (
       `Scor de anomalie ${fmt2(d.score)} din 1. ${d.positionText}. ` +
       `Suprafață aproximativ ${metriPatratiText(Math.round(d.areaM2))}.${grup} ` +
-      `Coordonate: ${d.coordsSpoken}.`
+      (truthBoxes
+        ? d.known
+          ? ` Se suprapune cu schimbarea cunoscută ${d.known.zone}: ${d.known.label}.`
+          : ' Nu se suprapune cu nicio schimbare cunoscută.'
+        : '') +
+      ` Coordonate: ${d.coordsSpoken}.`
     );
-  }, [selectedDetail]);
+  }, [selectedDetail, truthBoxes]);
 
   // Poll backend for anomaly detection result
   const checkAndFetchDetection = async () => {
@@ -514,10 +741,15 @@ export default function App() {
         if (data.status === 'done' && data.result) {
           applyGeoJsonResult(data.result);
           setStatus('Detecție finalizată');
-          announceStatus(
-            `Detecție finalizată. ${anomaliiText(data.result.features?.length || 0)} detectate. ` +
-              'Detaliile sunt în secțiunea Anomalii detectate.'
-          );
+          {
+            const doc = await loadTruth('test');
+            const rec = recallSentence(doc, data.result.features);
+            announceStatus(
+              `Detecție finalizată. ${anomaliiText(data.result.features?.length || 0)} detectate. ` +
+                (rec ? rec + ' ' : '') +
+                'Detaliile sunt în secțiunea Anomalii detectate.'
+            );
+          }
           return;
         }
       }
@@ -542,10 +774,15 @@ export default function App() {
               if (resultData.result) {
                 applyGeoJsonResult(resultData.result);
                 setStatus('Detecție finalizată');
-                announceStatus(
-                  `Detecție finalizată. ${anomaliiText(resultData.result.features?.length || 0)} detectate. ` +
-                    'Detaliile sunt în secțiunea Anomalii detectate.'
-                );
+                {
+                  const doc = await loadTruth('test');
+                  const rec = recallSentence(doc, resultData.result.features);
+                  announceStatus(
+                    `Detecție finalizată. ${anomaliiText(resultData.result.features?.length || 0)} detectate. ` +
+                      (rec ? rec + ' ' : '') +
+                      'Detaliile sunt în secțiunea Anomalii detectate.'
+                  );
+                }
               }
             } else if (statusData.status === 'failed') {
               clearInterval(pollInterval);
@@ -589,6 +826,9 @@ export default function App() {
           'aria-label',
           'Hartă ortofotoplan, comparație între zborul inițial T0 și zborul curent T1. ' +
             `${anomaliiText(n)} marcate cu poligoane pe hartă. ` +
+            (showKnownRef.current && truthCountRef.current
+              ? `${schimbariText(truthCountRef.current)} de referință marcate suplimentar cu contur galben întrerupt. `
+              : '') +
             'Echivalentul în text se află în secțiunea Anomalii detectate.'
         );
       }
@@ -1219,6 +1459,41 @@ export default function App() {
               </span>
             </div>
 
+            {/* Acoperirea inaintea rezumatului: ordinea de citire e ordinea importantei —
+                "a functionat?" inainte de "ce e acolo?". */}
+            {truthInfo ? (
+              <>
+                <p className="recall-line">{truthInfo.recall}</p>
+                <div className="known-toggle">
+                  <input
+                    type="checkbox"
+                    id="show-known-changes"
+                    className="known-toggle-input"
+                    checked={showKnown}
+                    onChange={(e) => toggleKnownChanges(e.target.checked)}
+                    aria-describedby="known-toggle-help"
+                  />
+                  <label htmlFor="show-known-changes">
+                    Afișează schimbările cunoscute pe hartă
+                  </label>
+                </div>
+                <p id="known-toggle-help" className="help-text">
+                  Cele {truthInfo.count} schimbări confirmate, cu contur galben întrerupt.
+                  Anomaliile candidate au contur roșu continuu.
+                </p>
+                {/* Enumerarea in proza: zonele exista ca text si cu dialogul inchis, si cu
+                    stratul stins. */}
+                <p className="known-list-prose">
+                  Schimbări cunoscute de referință: {truthInfo.labels}.
+                </p>
+              </>
+            ) : (
+              <p className="help-text">
+                Acest zbor nu are schimbări cunoscute de referință, deci acoperirea nu poate
+                fi calculată.
+              </p>
+            )}
+
             {/* Rezumatul e singurul lucru prezent permanent in arborele de accesibilitate:
                 tabelul e intr-un <dialog> inchis. Deci trebuie sa stea singur in picioare. */}
             <p className="anomalies-summary">{summaryText}</p>
@@ -1257,7 +1532,7 @@ export default function App() {
         >
           <div className="sheet-header">
             <h2 id="sheet-heading" ref={sheetHeadingRef} tabIndex={-1}>
-              Toate anomaliile detectate
+              {truthInfo ? 'Anomalii detectate și schimbări cunoscute' : 'Toate anomaliile detectate'}
             </h2>
             <button type="button" className="btn btn-secondary" onClick={closeSheet}>
               Închide lista
@@ -1266,6 +1541,61 @@ export default function App() {
           <p className="sheet-note">
             Anomalia selectată rămâne centrată pe hartă după închiderea listei.
           </p>
+
+          {truthInfo && (
+            <>
+              <h3 className="sheet-subheading">Schimbări cunoscute</h3>
+              <div
+                className="table-scroll sheet-table-scroll known-scroll"
+                tabIndex={0}
+                role="region"
+                aria-labelledby="known-table-caption"
+              >
+                <table className="anomalies-table">
+                  <caption id="known-table-caption">
+                    Schimbările injectate în perechea sintetică de referință și dacă au fost găsite
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Nr.</th>
+                      <th scope="col">Descriere</th>
+                      <th scope="col">Poziție</th>
+                      <th scope="col">Rezultat</th>
+                      <th scope="col">Acțiuni</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {truthInfo.rows.map((z) => (
+                      <tr key={z.zone}>
+                        <th scope="row">{z.zone}</th>
+                        <td>{z.label}</td>
+                        <td>{z.positionText}</td>
+                        <td>{z.hit ? `Găsită de anomalia ${z.hit.rank}` : 'Negăsită'}</td>
+                        <td>
+                          {z.hit ? (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-row"
+                              onClick={() => selectAnomaly(z.hit.feature, z.hit.index)}
+                            >
+                              Selectează
+                              <span className="sr-only"> anomalia {z.hit.rank}</span>
+                            </button>
+                          ) : (
+                            <>
+                              <span aria-hidden="true">—</span>
+                              <span className="sr-only">Nu există o anomalie corespunzătoare</span>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <h3 className="sheet-subheading">Toate anomaliile detectate</h3>
+            </>
+          )}
 
           <div
             className="table-scroll sheet-table-scroll"
@@ -1285,6 +1615,7 @@ export default function App() {
                   <th scope="col">Suprafață</th>
                   <th scope="col">Grup</th>
                   <th scope="col">Coordonate</th>
+                  {truthInfo && <th scope="col">Schimbare cunoscută</th>}
                   <th scope="col">Acțiuni</th>
                 </tr>
               </thead>
@@ -1308,6 +1639,23 @@ export default function App() {
                       </code>
                       <span className="sr-only">{row.coordsSpoken}</span>
                     </td>
+                    {truthInfo && (
+                      <td>
+                        {row.known ? (
+                          <>
+                            <span aria-hidden="true">{row.known.zone} · {row.known.label}</span>
+                            <span className="sr-only">
+                              Schimbarea numărul {row.known.zone}, {row.known.label}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span aria-hidden="true">—</span>
+                            <span className="sr-only">Nu se suprapune cu nicio schimbare cunoscută</span>
+                          </>
+                        )}
+                      </td>
+                    )}
                     <td>
                       <button
                         type="button"
