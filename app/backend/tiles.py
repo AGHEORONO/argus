@@ -22,6 +22,12 @@ MERCATOR = "EPSG:3857"
 # Keyed by layer -> (source, warped view, mtime of the file when it was opened).
 _cache_lock = threading.Lock()
 _dataset_cache: Dict[str, tuple] = {}
+# Un dataset GDAL nu e sigur intre fire de executie. Uvicorn ruleaza endpoint-urile
+# sincrone intr-un threadpool, deci mai multe cereri de tile ating acelasi handle in
+# paralel: rezultatul a fost un segfault al procesului, si — mai insidios — citiri care
+# esuau tacut si ieseau ca tile gol. Cate un lock per layer serializeaza doar layerul
+# atins, nu tot serverul.
+_layer_locks: Dict[str, threading.Lock] = {}
 _CACHE_MAX = 16
 
 
@@ -61,6 +67,15 @@ def resolve_layer_path(layer: str) -> Optional[str]:
         if os.path.exists(path):
             return path
     return None
+
+
+def _layer_lock(layer: str) -> threading.Lock:
+    with _cache_lock:
+        lock = _layer_locks.get(layer)
+        if lock is None:
+            lock = threading.Lock()
+            _layer_locks[layer] = lock
+        return lock
 
 
 def _close_entry(entry) -> None:
@@ -126,48 +141,56 @@ def get_tile(layer: str, z: int, x: int, y: int) -> bytes:
     by accident on an EPSG:4326 demo raster; every real orthophoto served blank tiles with
     a cheerful HTTP 200.
     """
-    src = get_cached_dataset(layer)
-    if src is None:
-        return EMPTY_TILE_PNG
-
     tile = morecantile.Tile(x=x, y=y, z=z)
     tile_bounds = tms.xy_bounds(tile)
 
-    try:
-        # Intersectia se verifica in Web Mercator, deci limitele sursei se transforma acolo.
-        west, south, east, north = transform_bounds(src.crs, MERCATOR, *src.bounds)
-        if (
-            tile_bounds.left >= east
-            or tile_bounds.right <= west
-            or tile_bounds.bottom >= north
-            or tile_bounds.top <= south
-        ):
+    # Serializat per layer: datasetele GDAL nu sunt sigure intre fire, iar uvicorn ruleaza
+    # endpoint-urile sincrone intr-un threadpool.
+    with _layer_lock(layer):
+        src = get_cached_dataset(layer)
+        if src is None:
             return EMPTY_TILE_PNG
 
-        # Un VRT aliniat exact pe tile: reproiecteaza si umple cu transparent in afara
-        # rasterului. WarpedVRT nu accepta citiri boundless, iar exceptia aia era inghitita
-        # de except-ul de mai jos si iesea tile gol, tacut.
-        dst_transform = from_bounds_transform(
-            tile_bounds.left, tile_bounds.bottom, tile_bounds.right, tile_bounds.top, 256, 256
-        )
-        with WarpedVRT(
-            src,
-            crs=MERCATOR,
-            transform=dst_transform,
-            width=256,
-            height=256,
-            resampling=Resampling.bilinear,
-        ) as vrt:
-            data = vrt.read(out_shape=(src.count, 256, 256))
-            alpha = vrt.dataset_mask()
+        try:
+            # Intersectia se verifica in Web Mercator, deci limitele sursei se transforma.
+            west, south, east, north = transform_bounds(src.crs, MERCATOR, *src.bounds)
+            if (
+                tile_bounds.left >= east
+                or tile_bounds.right <= west
+                or tile_bounds.bottom >= north
+                or tile_bounds.top <= south
+            ):
+                return EMPTY_TILE_PNG
 
-        if data.shape[0] == 3:
-            rgba = np.vstack([data, alpha[np.newaxis, ...].astype(np.uint8)])
-            return encode_png(rgba)
-        return encode_png(data)
+            # Un VRT aliniat exact pe tile: reproiecteaza si umple transparent in afara
+            # rasterului. WarpedVRT nu accepta citiri boundless, iar exceptia aia era
+            # inghitita de except-ul de mai jos si iesea tile gol, tacut.
+            dst_transform = from_bounds_transform(
+                tile_bounds.left,
+                tile_bounds.bottom,
+                tile_bounds.right,
+                tile_bounds.top,
+                256,
+                256,
+            )
+            with WarpedVRT(
+                src,
+                crs=MERCATOR,
+                transform=dst_transform,
+                width=256,
+                height=256,
+                resampling=Resampling.bilinear,
+            ) as vrt:
+                data = vrt.read(out_shape=(src.count, 256, 256))
+                alpha = vrt.dataset_mask()
 
-    except Exception:
-        return EMPTY_TILE_PNG
+            if data.shape[0] == 3:
+                rgba = np.vstack([data, alpha[np.newaxis, ...].astype(np.uint8)])
+                return encode_png(rgba)
+            return encode_png(data)
+
+        except Exception:
+            return EMPTY_TILE_PNG
 
 
 def _tile_response(png_bytes: bytes) -> Response:

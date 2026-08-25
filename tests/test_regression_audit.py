@@ -258,3 +258,54 @@ def test_cache_serves_rebuilt_imagery(tmp_path):
     finally:
         invalidate_layer_cache(flight)
         shutil.rmtree(flight_dir, ignore_errors=True)
+
+
+def test_concurrent_tile_requests_are_consistent():
+    """GDAL datasets are not thread-safe, and uvicorn runs sync endpoints in a threadpool,
+    so several tile requests hit the same cached handle at once. That segfaulted the whole
+    process — and, more insidiously, produced reads that failed silently and came out as
+    blank tiles, because the handler swallows every exception into EMPTY_TILE_PNG.
+    """
+    import math
+    import threading
+
+    if not os.path.exists(BEFORE):
+        pytest.skip("reference rasters not provisioned")
+
+    lon, lat, z = -78.4309, 0.0140, 16
+    n = 2 ** z
+    bx = int((lon + 180.0) / 360.0 * n)
+    by = int((1.0 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2.0 * n)
+    coords = [(bx + i, by + j) for i in range(3) for j in range(3)]
+
+    invalidate_layer_cache()
+    sequential = sum(
+        1 for tx, ty in coords if get_tile("before", z, tx, ty) != EMPTY_TILE_PNG
+    )
+    assert sequential > 0, "no real tiles even sequentially; fixture problem"
+
+    invalidate_layer_cache()
+    hits = []
+    errors = []
+    guard = threading.Lock()
+
+    def worker():
+        try:
+            for _ in range(5):
+                for tx, ty in coords:
+                    if get_tile("before", z, tx, ty) != EMPTY_TILE_PNG:
+                        with guard:
+                            hits.append(1)
+        except Exception as exc:  # pragma: no cover - only on regression
+            errors.append(repr(exc))
+
+    threads = [threading.Thread(target=worker) for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, errors
+    assert len(hits) == sequential * 5 * 6, (
+        f"concurrent access lost tiles: got {len(hits)}, expected {sequential * 5 * 6}"
+    )
