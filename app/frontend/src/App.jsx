@@ -28,6 +28,23 @@ const de = (n) => { const r = Math.abs(n) % 100; return (r === 0 || r >= 20) ? '
 const anomaliiText = (n) =>
   n === 0 ? 'nicio anomalie' : n === 1 ? 'o anomalie' : `${n} ${de(n)}anomalii`;
 const metriText = (n) => (n === 1 ? 'un metru' : `${n} ${de(n)}metri`);
+const zileText = (n) => (n === 1 ? 'o zi' : `${n} ${de(n)}zile`);
+const luniText = (n) => (n === 1 ? 'o lună' : `${n} ${de(n)}luni`);
+const secundeText = (n) => (n === 1 ? 'o secundă' : `${n} ${de(n)}secunde`);
+const intervalText = (z) =>
+  z < 60 ? zileText(z) : `aproximativ ${luniText(Math.round(z / 30))}`;
+
+// timeZone UTC e obligatoriu, nu cosmetic: captured_on e o data fara ora, iar
+// new Date('2026-03-12') se interpreteaza ca miezul noptii UTC. Formatata intr-un fus la
+// vest de UTC ar da "11 martie". Romania e la est, deci ar merge local si s-ar strica tacut
+// pentru oricine altcineva.
+const _dateFmt = new Intl.DateTimeFormat('ro-RO', {
+  day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+});
+const dataLunga = (iso) => (iso ? _dateFmt.format(new Date(`${iso}T00:00:00Z`)) : '');
+const zileIntre = (a, b) =>
+  Math.round(Math.abs(new Date(`${b}T00:00:00Z`) - new Date(`${a}T00:00:00Z`)) / 86400000);
+
 const schimbariText = (n) =>
   n === 0 ? 'nicio schimbare cunoscută'
   : n === 1 ? 'o schimbare cunoscută'
@@ -469,7 +486,7 @@ export default function App() {
         if (mapRef.current.getLayer(id)) mapRef.current.setLayoutProperty(id, 'visibility', 'none');
       }
     }
-    announceStatus(`Se încarcă zborul ${fid}.`);
+    announceStatus(`Se încarcă situl ${fid}.`);
 
     const b = flights.find((f) => f.id === fid)?.bounds || null;
     setRasterBounds(b);
@@ -489,20 +506,20 @@ export default function App() {
         if (data.result) {
           applyGeoJsonResult(data.result, true);
           const n = data.result.features?.length || 0;
-          setStatus(`Zbor ${fid}: detecție finalizată`);
+          setStatus(`Sit ${fid}: detecție finalizată`);
           const doc = await loadTruth(fid, flights.find((f) => f.id === fid)?.has_truth);
           const rec = recallSentence(doc, data.result.features);
           announceStatus(
-            `Zborul ${fid} a fost încărcat. ${anomaliiText(n)} detectate. ` +
+            `Situl ${fid} a fost încărcat. ${anomaliiText(n)} detectate. ` +
               (rec || 'Acest zbor nu are schimbări cunoscute de referință, deci acoperirea nu poate fi calculată.')
           );
         } else {
-          setStatus(`Zbor ${fid}: fără rezultat`);
-          announceStatus(`Zborul ${fid} a fost încărcat, dar nu are încă un rezultat de detecție.`);
+          setStatus(`Sit ${fid}: fără rezultat`);
+          announceStatus(`Situl ${fid} a fost încărcat, dar nu are încă un rezultat de detecție.`);
         }
       } else {
-        setStatus(`Zbor ${fid}: fără rezultat`);
-        announceStatus(`Zborul ${fid} nu are un rezultat de detecție.`);
+        setStatus(`Sit ${fid}: fără rezultat`);
+        announceStatus(`Situl ${fid} nu are un rezultat de detecție.`);
       }
     } catch {
       announceError('Eroare de rețea la încărcarea zborului. Încercați din nou.');
@@ -1074,7 +1091,7 @@ export default function App() {
 
         <div className="flight-switcher">
           <label htmlFor="view-flight-select" className="switcher-label">
-            Zbor afișat pe hartă
+            Sit afișat pe hartă
           </label>
           <select
             id="view-flight-select"
