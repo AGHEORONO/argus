@@ -199,3 +199,47 @@ def test_capture_on_unknown_site_is_rejected(client, tmp_path):
 def test_site_ids_cannot_escape_their_directory(client, hostile):
     res = client.get(f"/sites/{hostile}/captures")
     assert res.status_code in (400, 404), res.status_code
+
+
+def test_capture_tiles_serve_that_capture_imagery(client, tmp_path):
+    """Without tiles a capture cannot be shown, so the timeline would have nothing to
+    cross-fade. Checks pixels, not status codes: an empty tile is also HTTP 200."""
+    import io as _io
+    import math
+
+    from PIL import Image
+
+    from app.backend.tiles import EMPTY_TILE_PNG, invalidate_layer_cache
+
+    client.post("/sites", data={"site_id": SITE})
+    cap = add_capture(client, tmp_path, "2026-03-10", "a.tif", square=(100, 100))
+
+    # The COG is built in a background task; TestClient runs those before returning.
+    listed = client.get(f"/sites/{SITE}/captures").json()["captures"][0]
+    assert listed["has_tiles"], "COG was not prepared for the capture"
+    assert listed["bounds"], "capture has no geographic bounds"
+
+    west, south, east, north = listed["bounds"]
+    lon = (west + east) / 2
+    lat = (south + north) / 2
+    z = 17
+    n = 2 ** z
+    x = int((lon + 180.0) / 360.0 * n)
+    y = int((1.0 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2.0 * n)
+
+    invalidate_layer_cache(SITE)
+    res = client.get(f"/tiles/sites/{SITE}/{cap['id']}/{z}/{x}/{y}.png")
+    assert res.status_code == 200
+    assert res.content != EMPTY_TILE_PNG, "capture served the blank placeholder"
+
+    img = Image.open(_io.BytesIO(res.content)).convert("RGB")
+    assert any(hi > lo for lo, hi in img.getextrema()), "tile is a flat colour"
+
+
+def test_capture_tile_rejects_hostile_ids(client):
+    from app.backend.tiles import EMPTY_TILE_PNG
+
+    res = client.get(f"/tiles/sites/../{SITE}/17/1/1.png")
+    assert res.status_code in (200, 404)
+    if res.status_code == 200:
+        assert res.content == EMPTY_TILE_PNG

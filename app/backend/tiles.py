@@ -62,6 +62,10 @@ def resolve_layer_path(layer: str) -> Optional[str]:
         # before.tif/after.tif — deci tile-urile pentru zboruri urcate nu functionau.
         os.path.join("data", "flights", f"{layer}.cog.tif"),
         os.path.join("data", "flights", f"{layer}.tif"),
+        # Forma "<site_id>/<capture_id>", folosita de timeline. Fiecare captura are un
+        # singur raster, deci numele fisierului e fix.
+        os.path.join("data", "sites", layer, "raster.cog.tif"),
+        os.path.join("data", "sites", layer, "raster.tif"),
     ]
     for path in candidates:
         if os.path.exists(path):
@@ -217,6 +221,19 @@ def render_flight_tile(flight_id: str, layer: str, z: int, x: int, y: int):
     ):
         return _tile_response(EMPTY_TILE_PNG)
     return _tile_response(get_tile(os.path.join(flight_id, layer), z, x, y))
+
+
+@router.get("/tiles/sites/{site_id}/{capture_id}/{z}/{x}/{y}.png")
+def render_capture_tile(site_id: str, capture_id: str, z: int, x: int, y: int):
+    """Serve tiles for one dated capture of a site."""
+    for part in (site_id, capture_id):
+        if (
+            not part
+            or part in (".", "..")
+            or os.path.basename(part.replace("\\", "/")) != part
+        ):
+            return _tile_response(EMPTY_TILE_PNG)
+    return _tile_response(get_tile(os.path.join(site_id, capture_id), z, x, y))
 
 
 @router.get("/tiles/{layer}/{z}/{x}/{y}.png")
