@@ -188,6 +188,33 @@ def build_flight_cogs(flight_id: str, before_path: str, after_path: str):
         logger.info("Built %s", dst)
 
 
+def raster_bounds_wgs84(flight_id: str):
+    """Geographic extent of a flight's imagery, as [west, south, east, north].
+
+    The map needs it to clip tile requests, and the text equivalent needs it to anchor its
+    zone grid: anchoring on the anomaly bounding box instead would make "zona de nord-vest"
+    mean a different place on every flight.
+    """
+    from rasterio.warp import transform_bounds
+    import rasterio
+
+    candidates = (
+        [os.path.join("data", "reference", "before.cog.tif")]
+        if flight_id == "test"
+        else [os.path.join("data", "flights", flight_id, "before.cog.tif")]
+    )
+    for path in candidates:
+        if not os.path.exists(path):
+            continue
+        try:
+            with rasterio.open(path) as src:
+                w, s_, e, n = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
+                return [w, s_, e, n]
+        except Exception as exc:
+            logger.warning("Could not read bounds for %s: %s", path, exc)
+    return None
+
+
 @app.get("/flights")
 def list_flights():
     """List every known flight, newest first, with what each one has available."""
@@ -206,6 +233,7 @@ def list_flights():
     for r in rows:
         fid = r["id"]
         flights.append({
+            "bounds": raster_bounds_wgs84(fid),
             "id": fid,
             "status": r["status"],
             "updated_at": r["updated_at"],

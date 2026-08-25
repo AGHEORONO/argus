@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
-import { bounds as anomalyBounds } from './geo';
+import { bounds as anomalyBounds, summarise } from './geo';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000';
 const DEFAULT_CENTER = [-78.43072, 0.01334];
@@ -31,6 +31,20 @@ const metriText = (n) => (n === 1 ? 'un metru' : `${n} ${de(n)}metri`);
 const metriPatratiText = (n) =>
   n === 1 ? 'un metru pătrat' : `${n} ${de(n)}metri pătrați`;
 
+// In tiparul "în zona ___ a sitului", forma corecta e "de nord-vest" dar "centrală".
+const ZONE_ARTICLE = {
+  'nord-vest': 'de nord-vest', nord: 'de nord', 'nord-est': 'de nord-est',
+  vest: 'de vest', centru: 'centrală', est: 'de est',
+  'sud-vest': 'de sud-vest', sud: 'de sud', 'sud-est': 'de sud-est',
+};
+const zoneWithArticle = (z) => ZONE_ARTICLE[z] || `de ${z}`;
+
+// Backendul da [vest, sud, est, nord]; geo.js vrea un obiect.
+const rasterBoundsToBox = (b) =>
+  Array.isArray(b) && b.length === 4
+    ? { minLon: b[0], minLat: b[1], maxLon: b[2], maxLat: b[3] }
+    : null;
+
 const ISSUE_LABELS = {
   blurry: 'Neclare',
   no_gps: 'Fără date GPS',
@@ -59,6 +73,17 @@ export default function App() {
   const [flights, setFlights] = useState([]);
   const [viewedFlight, setViewedFlight] = useState('test');
   const [isSwitching, setIsSwitching] = useState(false);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  // Intinderea reala a rasterului zborului afisat. Ancoreaza si grila de zone: pe bbox-ul
+  // anomaliilor, "nord-vest" ar insemna alt loc la fiecare zbor.
+  const [rasterBounds, setRasterBounds] = useState(null);
+  const sheetRef = useRef(null);
+  const sheetHeadingRef = useRef(null);
+  const openSheetBtnRef = useRef(null);
+  const detailRef = useRef(null);
+  // Efectul hartii ruleaza o singura data, inainte ca selectAnomaly sa existe in closure.
+  const selectAnomalyRef = useRef(null);
+  const viewedFlightRef = useRef('test');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -120,7 +145,12 @@ export default function App() {
   const loadFlightList = async () => {
     try {
       const res = await fetch(`${API_BASE}/flights`);
-      if (res.ok) setFlights((await res.json()).flights || []);
+      if (res.ok) {
+        const list = (await res.json()).flights || [];
+        setFlights(list);
+        const cur = list.find((f) => f.id === viewedFlightRef.current);
+        if (cur?.bounds) setRasterBounds(cur.bounds);
+      }
     } catch {
       // Lista e o comoditate: daca nu vine, harta ramane pe zborul curent.
     }
@@ -176,11 +206,13 @@ export default function App() {
 
     map.on('load', () => {
       // 1. Before Raster Layer
+      // Fara `bounds` fix: erau limitele demo-ului si ar fi taiat tile-urile oricarui zbor
+      // urcat in alta parte. In afara rasterului backendul intoarce un PNG gol de ~2KB,
+      // cache-uit 24h, deci costul e neglijabil fata de a afisa gresit.
       map.addSource('before-source', {
         type: 'raster',
         tiles: [`${API_BASE}/tiles/before/{z}/{x}/{y}.png`],
         tileSize: 256,
-        bounds: [-78.43263, 0.01054, -78.42882, 0.01614],
       });
 
       map.addLayer({
@@ -198,7 +230,6 @@ export default function App() {
         type: 'raster',
         tiles: [`${API_BASE}/tiles/after/{z}/{x}/{y}.png`],
         tileSize: 256,
-        bounds: [-78.43263, 0.01054, -78.42882, 0.01614],
       });
 
       map.addLayer({
@@ -256,6 +287,9 @@ export default function App() {
             `Patch: ${props.patch_index || ''}`
           )
           .addTo(map);
+        // Aceeasi selectie ca butonul din tabel: mouse-ul si tastatura converg pe o stare.
+        // Conteaza pentru cine foloseste lupa plus voce — altfel popup-ul se deschide mut.
+        selectAnomalyRef.current?.(feature, (props.rank || 1) - 1);
       });
 
       map.on('mouseenter', 'anomalies-fill', () => {
@@ -301,6 +335,9 @@ export default function App() {
     setAnomalies([]);
     setSelectedAnomaly(null);
     announceStatus(`Se încarcă zborul ${fid}.`);
+
+    const b = flights.find((f) => f.id === fid)?.bounds || null;
+    setRasterBounds(b);
 
     const map = mapRef.current;
     if (map) {
@@ -359,6 +396,113 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    selectAnomalyRef.current = selectAnomaly;
+    viewedFlightRef.current = viewedFlight;
+  });
+
+  const openSheet = () => {
+    const d = sheetRef.current;
+    if (!d || d.open) return;
+    d.showModal();
+    setIsSheetOpen(true);
+    // <dialog> ar focusa singur primul descendent focusabil, adica butonul de inchidere.
+    // Titlul e locul corect: spune unde ai ajuns.
+    sheetHeadingRef.current?.focus();
+  };
+
+  const closeSheet = () => {
+    const d = sheetRef.current;
+    if (d?.open) d.close();
+  };
+
+  // Escape si clicul pe backdrop inchid dialogul fara sa treaca prin handler-ul nostru.
+  // Fara sincronizarea asta, starea React ramane "deschis" iar DOM-ul e inchis.
+  useEffect(() => {
+    const d = sheetRef.current;
+    if (!d) return;
+    const onClose = () => {
+      setIsSheetOpen(false);
+      openSheetBtnRef.current?.focus();
+    };
+    d.addEventListener('close', onClose);
+    return () => d.removeEventListener('close', onClose);
+  }, []);
+
+  // Stratul de limbaj: geo.js intoarce cifre, aici devin propozitii. Rotunjirile sunt
+  // deliberate — intre eroarea GPS si aproximarea centroidului, "la 127,4 m" ar pretinde
+  // o precizie pe care n-o avem si ar face utilizatorul sa nu creada tot panoul.
+  const anomalyModel = useMemo(
+    () => (anomalies.length ? summarise(anomalies, rasterBoundsToBox(rasterBounds)) : null),
+    [anomalies, rasterBounds]
+  );
+
+  const anomalyRows = useMemo(() => {
+    if (!anomalyModel) return [];
+    return anomalyModel.items.map((it, i) => {
+      const dist = it.distanceM < 20 ? null : Math.round(it.distanceM / 10) * 10;
+      return {
+        ...it,
+        index: i,
+        feature: anomalies[i],
+        positionText:
+          dist === null
+            ? `În zona ${zoneWithArticle(it.zone)} a sitului, la mai puțin de 20 de metri de centru`
+            : `În zona ${zoneWithArticle(it.zone)} a sitului, la aproximativ ${metriText(dist)} de centru`,
+        groupText: it.clusterId ? `Grupul ${it.clusterId}` : 'Izolată',
+        coordsSpoken:
+          `${Math.abs(it.lat).toFixed(6).replace('.', ',')} grade ${it.lat >= 0 ? 'nord' : 'sud'}, ` +
+          `${Math.abs(it.lon).toFixed(6).replace('.', ',')} grade ${it.lon >= 0 ? 'est' : 'vest'}`,
+      };
+    });
+  }, [anomalyModel, anomalies]);
+
+  const summaryText = useMemo(() => {
+    const m = anomalyModel;
+    if (!m) return '';
+    const parts = [
+      `${anomaliiText(m.count)} detectate pe o suprafață de aproximativ ` +
+        `${Math.round(m.widthM)} pe ${metriText(Math.round(m.heightM))}.`,
+      `Scorurile merg de la ${fmt2(m.minScore)} la ${fmt2(m.maxScore)}.`,
+    ];
+    if (m.uniformArea) {
+      parts.push(`Fiecare anomalie acoperă aproximativ ${metriPatratiText(Math.round(m.typicalAreaM2))}.`);
+    }
+    const zones = m.zonesRanked
+      .slice(0, 3)
+      .map(([z, n]) => `${n} în zona ${zoneWithArticle(z)}`)
+      .join(', ');
+    if (zones) parts.push(`Distribuție: ${zones}.`);
+    if (m.clusters.length) {
+      const g = m.clusters
+        .map((c) => `${anomaliiText(c.members.length)} în zona ${zoneWithArticle(c.zone)}`)
+        .join(', ');
+      parts.push(
+        `Grupări: ${m.clusters.length === 1 ? 'un grup' : `${m.clusters.length} grupuri`} de anomalii apropiate — ${g}.` +
+          (m.isolated ? ` Restul de ${m.isolated} sunt izolate.` : '')
+      );
+    }
+    return parts.join(' ');
+  }, [anomalyModel]);
+
+  const selectedDetail = useMemo(
+    () => anomalyRows.find((r) => r.rank === selectedAnomaly) || null,
+    [anomalyRows, selectedAnomaly]
+  );
+
+  const detailText = useMemo(() => {
+    const d = selectedDetail;
+    if (!d) return '';
+    const grup = d.clusterId
+      ? ` Face parte din grupul ${d.clusterId}.`
+      : ' Nu face parte dintr-un grup de anomalii apropiate.';
+    return (
+      `Scor de anomalie ${fmt2(d.score)} din 1. ${d.positionText}. ` +
+      `Suprafață aproximativ ${metriPatratiText(Math.round(d.areaM2))}.${grup} ` +
+      `Coordonate: ${d.coordsSpoken}.`
+    );
+  }, [selectedDetail]);
+
   // Poll backend for anomaly detection result
   const checkAndFetchDetection = async () => {
     try {
@@ -370,6 +514,10 @@ export default function App() {
         if (data.status === 'done' && data.result) {
           applyGeoJsonResult(data.result);
           setStatus('Detecție finalizată');
+          announceStatus(
+            `Detecție finalizată. ${anomaliiText(data.result.features?.length || 0)} detectate. ` +
+              'Detaliile sunt în secțiunea Anomalii detectate.'
+          );
           return;
         }
       }
@@ -394,6 +542,10 @@ export default function App() {
               if (resultData.result) {
                 applyGeoJsonResult(resultData.result);
                 setStatus('Detecție finalizată');
+                announceStatus(
+                  `Detecție finalizată. ${anomaliiText(resultData.result.features?.length || 0)} detectate. ` +
+                    'Detaliile sunt în secțiunea Anomalii detectate.'
+                );
               }
             } else if (statusData.status === 'failed') {
               clearInterval(pollInterval);
@@ -412,12 +564,34 @@ export default function App() {
     }
   };
 
+  const featureCentroid = (feature) => {
+    const ring = feature?.geometry?.coordinates?.[0];
+    if (!Array.isArray(ring) || ring.length < 4) return null;
+    const pts = ring.slice(0, -1);
+    return [
+      pts.reduce((a, q) => a + q[0], 0) / pts.length,
+      pts.reduce((a, q) => a + q[1], 0) / pts.length,
+    ];
+  };
+
   const applyGeoJsonResult = (geojson, recenter = false) => {
     if (mapRef.current && mapRef.current.getSource('anomalies-source')) {
       mapRef.current.getSource('anomalies-source').setData(geojson);
     }
     if (geojson && geojson.features) {
       setAnomalies(geojson.features);
+      const n = geojson.features.length;
+      // Canvasul primeste de la MapLibre un role="region"; ii dam un nume care spune ce se
+      // vede si unde e echivalentul in text.
+      const canvas = mapRef.current?.getCanvas?.();
+      if (canvas) {
+        canvas.setAttribute(
+          'aria-label',
+          'Hartă ortofotoplan, comparație între zborul inițial T0 și zborul curent T1. ' +
+            `${anomaliiText(n)} marcate cu poligoane pe hartă. ` +
+            'Echivalentul în text se află în secțiunea Anomalii detectate.'
+        );
+      }
       // Un zbor urcat poate acoperi cu totul alt loc decat demo-ul, deci camera trebuie mutata
       // acolo — altfel comuti zborul si vezi o harta goala.
       if (recenter && mapRef.current) {
@@ -432,24 +606,20 @@ export default function App() {
     }
   };
 
-  const flyToAnomaly = (feature, index) => {
-    setSelectedAnomaly(feature.id ?? index);
-    // Activarea muta doar camera pe un canvas WebGL — fara acest anunt, controlul nu produce
-    // niciun efect perceptibil pentru cine nu vede harta.
+  // Selectia nu muta niciodata focusul: marcheaza randul, randeaza detaliul in panoul
+  // lateral, misca camera si anunta scurt. Aceeasi functie pentru randul din tabel si
+  // pentru clicul pe canvas, ca mouse-ul si tastatura sa nu divergheze.
+  const selectAnomaly = (feature, index) => {
     const rank = feature.properties?.rank ?? index + 1;
-    const score = fmt2(feature.properties?.anomaly_score);
-    announceStatus(`Harta centrată pe anomalia ${rank}, scor ${score}.`);
+    setSelectedAnomaly(rank);
+    announceStatus(`Anomalia ${rank} selectată.`);
     if (!mapRef.current || !feature.geometry) return;
-
-    const coords = feature.geometry.coordinates[0];
-    const avgLng = coords.reduce((sum, c) => sum + c[0], 0) / coords.length;
-    const avgLat = coords.reduce((sum, c) => sum + c[1], 0) / coords.length;
-
-    mapRef.current.flyTo({
-      center: [avgLng, avgLat],
-      zoom: 18.5,
-      speed: 1.2,
-    });
+    const c = featureCentroid(feature);
+    if (c) {
+      // Fara essential:true — MapLibre suprima singur animatia camerei sub
+      // prefers-reduced-motion, si asa vrem. Nu adauga essential aici.
+      mapRef.current.flyTo({ center: c, zoom: 18.5, speed: 1.2 });
+    }
   };
 
   // Files selection handler (shared by input onChange and drag & drop)
@@ -1039,7 +1209,7 @@ export default function App() {
         {/* Map Container */}
         <div id="map" ref={mapContainer} />
 
-        {/* Side Panel: Anomalies Inspector */}
+        {/* Side Panel: rezumat + declansator. Tabelul complet sta in dialogul de mai jos. */}
         {anomalies.length > 0 && (
           <section className="side-panel" aria-labelledby="anomalies-heading">
             <div className="panel-header">
@@ -1048,27 +1218,112 @@ export default function App() {
                 {anomalies.length}
               </span>
             </div>
-            <div className="candidates-list">
-              {anomalies.map((f, i) => (
-                <button
-                  key={f.id || i}
-                  type="button"
-                  className="candidate-item"
-                  aria-current={selectedAnomaly === (f.id ?? i) ? 'true' : undefined}
-                  aria-label={`Anomalia ${f.properties?.rank || i + 1}, scor ${fmt2(
-                    f.properties?.anomaly_score
-                  )}. Centrează harta.`}
-                  onClick={() => flyToAnomaly(f, i)}
-                >
-                  <span className="candidate-rank">#{f.properties?.rank || i + 1}</span>
-                  <span className="candidate-score">
-                    Scor: {fmt4(f.properties?.anomaly_score)}
-                  </span>
-                </button>
-              ))}
-            </div>
+
+            {/* Rezumatul e singurul lucru prezent permanent in arborele de accesibilitate:
+                tabelul e intr-un <dialog> inchis. Deci trebuie sa stea singur in picioare. */}
+            <p className="anomalies-summary">{summaryText}</p>
+
+            <button
+              type="button"
+              ref={openSheetBtnRef}
+              className="btn btn-primary btn-open-sheet"
+              aria-haspopup="dialog"
+              onClick={openSheet}
+            >
+              Vezi lista completă
+              <span className="sr-only">, {anomaliiText(anomalies.length)}</span>
+              <span className="count-chip" aria-hidden="true">{anomalies.length}</span>
+            </button>
+
+            {/* Detaliul apare doar cat timp lista e inchisa: altfel ar exista doua suprafete
+                de citire concurente si id-uri duplicate care ar rupe aria-describedby. */}
+            {!isSheetOpen && selectedDetail && (
+              <>
+                <h3 id="detail-heading" ref={detailRef} tabIndex={-1}>
+                  Anomalia {selectedDetail.rank}
+                </h3>
+                <p id="detail-body" className="anomaly-detail">{detailText}</p>
+              </>
+            )}
           </section>
         )}
+
+        {/* Lista completa, in top layer. <dialog> aduce capcana de focus, Escape si inert
+            pe fundal — inclusiv peste DOM-ul injectat de MapLibre, pe care altfel l-am fi uitat. */}
+        <dialog
+          ref={sheetRef}
+          className="anomalies-sheet"
+          aria-labelledby="sheet-heading"
+        >
+          <div className="sheet-header">
+            <h2 id="sheet-heading" ref={sheetHeadingRef} tabIndex={-1}>
+              Toate anomaliile detectate
+            </h2>
+            <button type="button" className="btn btn-secondary" onClick={closeSheet}>
+              Închide lista
+            </button>
+          </div>
+          <p className="sheet-note">
+            Anomalia selectată rămâne centrată pe hartă după închiderea listei.
+          </p>
+
+          <div
+            className="table-scroll sheet-table-scroll"
+            tabIndex={0}
+            role="region"
+            aria-labelledby="anomalies-table-caption"
+          >
+            <table className="anomalies-table">
+              <caption id="anomalies-table-caption">
+                Toate anomaliile detectate, ordonate după scor descrescător
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Rang</th>
+                  <th scope="col">Scor</th>
+                  <th scope="col">Poziție</th>
+                  <th scope="col">Suprafață</th>
+                  <th scope="col">Grup</th>
+                  <th scope="col">Coordonate</th>
+                  <th scope="col">Acțiuni</th>
+                </tr>
+              </thead>
+              <tbody>
+                {anomalyRows.map((row) => (
+                  <tr
+                    key={row.rank}
+                    aria-current={selectedAnomaly === row.rank ? 'true' : undefined}
+                  >
+                    <th scope="row">{row.rank}</th>
+                    <td>{fmt2(row.score)}</td>
+                    <td>{row.positionText}</td>
+                    <td>
+                      <span aria-hidden="true">{Math.round(row.areaM2)} m²</span>
+                      <span className="sr-only">{metriPatratiText(Math.round(row.areaM2))}</span>
+                    </td>
+                    <td>{row.groupText}</td>
+                    <td>
+                      <code aria-hidden="true">
+                        {row.lat.toFixed(6)}, {row.lon.toFixed(6)}
+                      </code>
+                      <span className="sr-only">{row.coordsSpoken}</span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-row"
+                        onClick={() => selectAnomaly(row.feature, row.index)}
+                      >
+                        Selectează
+                        <span className="sr-only"> anomalia {row.rank}</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </dialog>
 
         {/* Floating Bottom Slider */}
         <div className="slider-widget" role="group" aria-label="Comparație între zboruri">

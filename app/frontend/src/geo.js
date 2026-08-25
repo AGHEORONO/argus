@@ -114,8 +114,10 @@ export function describeFeature(feature, index, bbox) {
 }
 
 /** Site-level figures: extent, score range, how the candidates spread across zones. */
-export function summarise(features) {
-  const bbox = bounds(features);
+export function summarise(features, anchorBbox = null) {
+  // Grila de zone se ancoreaza pe intinderea rasterului cand o stim: pe bbox-ul anomaliilor,
+  // "zona de nord-vest" ar desemna alt loc la fiecare zbor, deci n-ar fi comparabila.
+  const bbox = anchorBbox || bounds(features);
   if (!bbox) return null;
   const midLat = (bbox.minLat + bbox.maxLat) / 2;
   const items = (features || [])
@@ -130,8 +132,12 @@ export function summarise(features) {
   const areas = items.map((i) => i.areaM2);
   const uniformArea = Math.max(...areas) - Math.min(...areas) < 1;
 
+  const { clusters, isolated } = clusterItems(items);
+
   return {
     count: items.length,
+    clusters,
+    isolated,
     bbox,
     widthM: (bbox.maxLon - bbox.minLon) * mPerDegLon(midLat),
     heightM: (bbox.maxLat - bbox.minLat) * M_PER_DEG_LAT,
@@ -146,4 +152,42 @@ export function summarise(features) {
     zonesRanked: Object.entries(byZone).sort((a, b) => b[1] - a[1]),
     items,
   };
+}
+
+/**
+ * Greedy single-linkage clustering on centroids.
+ *
+ * The genuinely analytic fact about a detection run is not "50 anomalies" but "six of them
+ * sit together in the north-east". That is what a sighted user reads off the map instantly
+ * and what no per-row description can convey.
+ *
+ * @param items output of describeFeature, already sorted by rank
+ * @param radiusM join distance; 50 m is about a third of a grid cell at this site size
+ */
+export function clusterItems(items, radiusM = 50) {
+  const clusters = [];
+  for (const it of items) {
+    let joined = null;
+    for (const c of clusters) {
+      // Distanta pe metri locali: la intinderi de sute de metri diferenta fata de un calcul
+      // geodezic e neglijabila, si evitam o dependenta.
+      const near = c.members.some((m) => {
+        const dx = (m.lon - it.lon) * 111320 * Math.cos((it.lat * Math.PI) / 180);
+        const dy = (m.lat - it.lat) * 110540;
+        return Math.sqrt(dx * dx + dy * dy) <= radiusM;
+      });
+      if (near) { joined = c; break; }
+    }
+    if (joined) joined.members.push(it);
+    else clusters.push({ members: [it] });
+  }
+  // Perechile sunt zgomot; un grup incepe de la trei.
+  const real = clusters.filter((c) => c.members.length >= 3);
+  real.forEach((c, i) => {
+    c.id = i + 1;
+    c.zone = c.members[0].zone;
+    c.members.forEach((m) => { m.clusterId = c.id; });
+  });
+  const grouped = real.reduce((n, c) => n + c.members.length, 0);
+  return { clusters: real, isolated: items.length - grouped };
 }
