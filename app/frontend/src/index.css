@@ -903,6 +903,14 @@ body, html, #root {
    Stilurile implicite ale UA pentru <dialog> sunt background:canvas, border:solid,
    padding:1em si margin:auto — adica o cutie alba, centrata, pe o aplicatie inchisa la
    culoare. Trebuie resetate explicit, nu e cosmetica ci contrast. */
+/* `display: flex` aici ar suprascrie regula UA `dialog:not([open]) { display: none }`,
+   deci panoul ar fi pictat permanent, peste harta, cu tot tabelul focusabil. S-a intamplat:
+   selectorul trebuie sa vizeze DOAR starea deschisa. */
+dialog.anomalies-sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+
 dialog.anomalies-sheet {
   margin: auto auto 0;              /* lipit de marginea de jos */
   width: 100%;
@@ -914,8 +922,6 @@ dialog.anomalies-sheet {
   padding: 0;
   background: var(--bg-panel-solid);
   color: var(--text-primary);
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
 }
@@ -1046,8 +1052,10 @@ dialog.anomalies-sheet::backdrop {
     display: none;
   }
 
-  dialog.anomalies-sheet {
-    display: block;
+  dialog.anomalies-sheet,
+  dialog.anomalies-sheet[open] {
+    display: flex;
+    flex-direction: column;
     position: static;
     height: auto;
     max-height: none;
