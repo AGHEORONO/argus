@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.backend.detect import detect_changes
 from app.backend.ingest import validate_flight_photos
+from app.backend.sites import build_router as build_sites_router, init_site_tables
 from app.backend.tiles import router as tiles_router
 
 # Testele importau get_db si scriau in baza de date de productie, lasand un zbor fantoma
@@ -78,6 +79,12 @@ def init_db():
                 conn.execute(f"ALTER TABLE flights ADD COLUMN {col_name} {col_def}")
         conn.commit()
 
+    # Modelul de timeline: un sit are N capturi datate, iar o comparatie e intre oricare
+    # doua. Vechiul model, in care un "zbor" era o PERECHE de rastere, forta exact doi
+    # termeni de comparatie, alesi la incarcare.
+    with get_db() as conn:
+        init_site_tables(conn)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -115,6 +122,38 @@ app.add_middleware(
 
 # Mount dynamic tile server router
 app.include_router(tiles_router)
+
+# Helperii de raster stau in main.py; importul lor din sites.py ar face un ciclu, deci se
+# injecteaza la montare.
+def _raster_bounds_of(path: str):
+    from rasterio.warp import transform_bounds
+    import rasterio
+
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with rasterio.open(path) as src:
+            w, s_, e, n = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
+            return [w, s_, e, n]
+    except Exception as exc:
+        logger.warning("Could not read bounds for %s: %s", path, exc)
+        return None
+
+
+def _site_helpers():
+    from app.backend.provision import MAX_DEMO_DIM, build_cog, downsample_if_needed
+    from app.backend.tiles import invalidate_layer_cache
+
+    return {
+        "build_cog": build_cog,
+        "downsample_if_needed": downsample_if_needed,
+        "max_dim": MAX_DEMO_DIM,
+        "save_upload": save_upload,
+        "max_raster_bytes": MAX_RASTER_BYTES,
+        "invalidate_layer_cache": invalidate_layer_cache,
+        "raster_bounds": _raster_bounds_of,
+    }
+
 
 
 @app.get("/")
@@ -651,3 +690,8 @@ def get_flight_result(flight_id: str):
         "status": "done",
         "result": parsed_geojson,
     }
+
+
+# Montat la final: routerul primeste helperi (save_upload, limitele) definiti mai jos in
+# acest fisier, deci montarea nu poate preceda definitiile lor.
+app.include_router(build_sites_router(get_db, _site_helpers()))
