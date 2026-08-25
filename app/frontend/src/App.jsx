@@ -131,6 +131,7 @@ export default function App() {
   // de starea curenta fara sa depinda de closure.
   const showKnownRef = useRef(false);
   const truthCountRef = useRef(0);
+  const anomaliesRef = useRef(0);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -558,6 +559,7 @@ export default function App() {
     viewedFlightRef.current = viewedFlight;
     showKnownRef.current = showKnown;
     truthCountRef.current = truth?.features?.length || 0;
+    anomaliesRef.current = anomalies.length;
   });
 
   const toggleKnownChanges = (on) => {
@@ -571,22 +573,7 @@ export default function App() {
       }
     }
     const n = truth?.features?.length || 0;
-    // Numele canvasului descrie ce se vede acum: comutatorul schimba asta, deci trebuie
-    // rescris aici, nu doar la incarcarea rezultatului. Nu e live region, deci e usor de uitat.
-    const canvas = mapRef.current?.getCanvas?.();
-    if (canvas) {
-      const base = canvas.getAttribute('aria-label') || '';
-      const fara = base.replace(/\s*\d+[^.]*contur galben întrerupt\.\s*/, ' ');
-      canvas.setAttribute(
-        'aria-label',
-        on
-          ? fara.replace(
-              'Echivalentul în text',
-              `${schimbariText(n)} de referință marcate suplimentar cu contur galben întrerupt. Echivalentul în text`
-            )
-          : fara
-      );
-    }
+    applyCanvasLabel({ showKnown: on, truthCount: n });
     announceStatus(
       on
         ? `Cele ${schimbariText(n)} sunt acum afișate pe hartă, cu contur galben întrerupt. Lista lor se află în secțiunea Schimbări cunoscute.`
@@ -834,6 +821,34 @@ export default function App() {
     }
   };
 
+  // Eticheta canvasului se scrie acum din patru locuri. Construita dintr-o singura functie,
+  // nu peticita cu regex: varianta veche cauta /\d+[^.]*contur galben/ si, de indata ce
+  // intra date in text, ar fi prins "14" din "14 martie 2026" in loc de numarul de anomalii,
+  // stergand tacut fragmentul gresit.
+  const buildCanvasLabel = ({ anomalyCount, showKnown, truthCount }) => {
+    const parts = ['Hartă ortofotoplan, comparație între zborul inițial și zborul curent.'];
+    parts.push(`${anomaliiText(anomalyCount)} marcate cu poligoane pe hartă.`);
+    if (showKnown && truthCount) {
+      parts.push(`${schimbariText(truthCount)} de referință marcate suplimentar cu contur galben întrerupt.`);
+    }
+    parts.push('Echivalentul în text se află în secțiunea Anomalii detectate.');
+    return parts.join(' ');
+  };
+
+  const applyCanvasLabel = (overrides = {}) => {
+    const canvas = mapRef.current?.getCanvas?.();
+    if (!canvas) return;
+    canvas.setAttribute(
+      'aria-label',
+      buildCanvasLabel({
+        anomalyCount: anomaliesRef.current,
+        showKnown: showKnownRef.current,
+        truthCount: truthCountRef.current,
+        ...overrides,
+      })
+    );
+  };
+
   const featureCentroid = (feature) => {
     const ring = feature?.geometry?.coordinates?.[0];
     if (!Array.isArray(ring) || ring.length < 4) return null;
@@ -851,31 +866,7 @@ export default function App() {
     if (geojson && geojson.features) {
       setAnomalies(geojson.features);
       const n = geojson.features.length;
-      // Canvasul primeste de la MapLibre un role="region"; ii dam un nume care spune ce se
-      // vede si unde e echivalentul in text.
-      const canvas = mapRef.current?.getCanvas?.();
-      if (canvas) {
-        canvas.setAttribute(
-          'aria-label',
-          'Hartă ortofotoplan, comparație între zborul inițial T0 și zborul curent T1. ' +
-            `${anomaliiText(n)} marcate cu poligoane pe hartă. ` +
-            (showKnownRef.current && truthCountRef.current
-              ? `${schimbariText(truthCountRef.current)} de referință marcate suplimentar cu contur galben întrerupt. `
-              : '') +
-            'Echivalentul în text se află în secțiunea Anomalii detectate.'
-        );
-      }
-      // Un zbor urcat poate acoperi cu totul alt loc decat demo-ul, deci camera trebuie mutata
-      // acolo — altfel comuti zborul si vezi o harta goala.
-      if (recenter && mapRef.current) {
-        const b = anomalyBounds(geojson.features);
-        if (b) {
-          mapRef.current.fitBounds(
-            [[b.minLon, b.minLat], [b.maxLon, b.maxLat]],
-            { padding: 60, duration: 0 }
-          );
-        }
-      }
+      applyCanvasLabel({ anomalyCount: n });
     }
   };
 
@@ -1120,7 +1111,10 @@ export default function App() {
         </div>
 
         <div className="header-status">
-          <div className={`status-badge ${isProcessing ? 'loading' : ''}`} role="status">
+          {/* Fara role="status" aici: regiunea .sr-only de mai jos e tot o regiune politicoasa
+              si poarta text strict mai bogat. Amandoua fiind live, fiecare schimbare de stare
+              se anunta de doua ori. Badge-ul ramane stare vizuala. */}
+          <div className={`status-badge ${isProcessing ? 'loading' : ''}`}>
             <span className="status-dot" aria-hidden="true"></span>
             <span>{status}</span>
           </div>
