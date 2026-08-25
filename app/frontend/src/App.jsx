@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import { bounds as anomalyBounds, summarise, zoneName } from './geo';
+import Timeline from './Timeline';
+import { dataLunga } from './timeline-layout';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000';
 const DEFAULT_CENTER = [-78.43072, 0.01334];
@@ -34,16 +36,12 @@ const secundeText = (n) => (n === 1 ? 'o secundă' : `${n} ${de(n)}secunde`);
 const intervalText = (z) =>
   z < 60 ? zileText(z) : `aproximativ ${luniText(Math.round(z / 30))}`;
 
-// timeZone UTC e obligatoriu, nu cosmetic: captured_on e o data fara ora, iar
-// new Date('2026-03-12') se interpreteaza ca miezul noptii UTC. Formatata intr-un fus la
-// vest de UTC ar da "11 martie". Romania e la est, deci ar merge local si s-ar strica tacut
-// pentru oricine altcineva.
-const _dateFmt = new Intl.DateTimeFormat('ro-RO', {
-  day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
-});
-const dataLunga = (iso) => (iso ? _dateFmt.format(new Date(`${iso}T00:00:00Z`)) : '');
-const zileIntre = (a, b) =>
-  Math.round(Math.abs(new Date(`${b}T00:00:00Z`) - new Date(`${a}T00:00:00Z`)) / 86400000);
+// Acordul se face in helper, nu prin concatenare: `${anomaliiText(n)} detectate` da
+// "nicio anomalie detectate" la zero si "o anomalie detectate" la unu.
+const anomaliiDetectate = (n) =>
+  n === 0 ? 'Nicio anomalie detectată'
+  : n === 1 ? 'O anomalie detectată'
+  : `${n} ${de(n)}anomalii detectate`;
 
 const schimbariText = (n) =>
   n === 0 ? 'nicio schimbare cunoscută'
@@ -114,6 +112,12 @@ export default function App() {
   // Intinderea reala a rasterului zborului afisat. Ancoreaza si grila de zone: pe bbox-ul
   // anomaliilor, "nord-vest" ar insemna alt loc la fiecare zbor.
   const [rasterBounds, setRasterBounds] = useState(null);
+  const [timelineCaptures, setTimelineCaptures] = useState([]);
+  const [baselineId, setBaselineId] = useState(null);
+  const [targetId, setTargetId] = useState(null);
+  const [computedPairs, setComputedPairs] = useState(new Set());
+  const [isComparing, setIsComparing] = useState(false);
+  const DEMO_SITE = 'sit_demo';
   // Adevarul de referinta exista doar pentru perechea sintetica: stim ce s-a schimbat
   // fiindca noi am injectat schimbarile. Pe un zbor real e null, si asta se SPUNE, nu se
   // ascunde — tacerea ar face datele absente sa semene cu un scor de zero.
@@ -243,6 +247,148 @@ export default function App() {
     // Rangul celei mai adanci schimbari gasite costa nimic si face cifra onesta.
     return `${found} din ${zones.length} schimbări cunoscute de referință au fost găsite`
       + (found === zones.length ? `, toate în primele ${deepest} anomalii după scor.` : '.');
+  };
+
+  const pairKey = (a, b) => (a && b ? [a, b].sort().join('|') : '');
+  const isPairComputed = (a, b) => computedPairs.has(pairKey(a, b));
+
+  const loadTimeline = async () => {
+    try {
+      const [capsRes, cmpRes] = await Promise.all([
+        fetch(`${API_BASE}/sites/${DEMO_SITE}/captures`),
+        fetch(`${API_BASE}/sites/${DEMO_SITE}/comparisons`),
+      ]);
+      if (!capsRes.ok) return;
+      const caps = (await capsRes.json()).captures || [];
+      setTimelineCaptures(caps);
+      if (caps.length >= 2) {
+        setBaselineId((prev) => prev || caps[0].id);
+        setTargetId((prev) => prev || caps[caps.length - 1].id);
+      }
+      if (cmpRes.ok) {
+        const list = (await cmpRes.json()).comparisons || [];
+        setComputedPairs(
+          new Set(list.filter((c) => c.has_result).map((c) => pairKey(c.base_capture, c.target_capture)))
+        );
+      }
+    } catch {
+      // Timeline-ul e o functie in plus: daca nu se incarca, restul aplicatiei merge.
+    }
+  };
+
+  useEffect(() => {
+    loadTimeline();
+  }, []);
+
+  const captureTileUrl = (captureId) =>
+    `${API_BASE}/tiles/sites/${DEMO_SITE}/${encodeURIComponent(captureId)}/{z}/{x}/{y}.png`;
+
+  const applyPairToMap = (baseCap, targetCap) => {
+    const map = mapRef.current;
+    if (!map || !baseCap || !targetCap) return;
+    const pairs = [['before', baseCap], ['after', targetCap]];
+    for (const [layer, cap] of pairs) {
+      const src = map.getSource(`${layer}-source`);
+      if (src && src.setTiles) src.setTiles([captureTileUrl(cap.id)]);
+    }
+  };
+
+  const handleCaptureSelect = (which, id) => {
+    const nextBase = which === 'baseline' ? id : baselineId;
+    const nextTarget = which === 'target' ? id : targetId;
+    if (which === 'baseline') setBaselineId(id);
+    else setTargetId(id);
+
+    const b = timelineCaptures.find((c) => c.id === nextBase);
+    const t = timelineCaptures.find((c) => c.id === nextTarget);
+    // Schimbarea perechii NU porneste o comparatie: parcurgerea cu sagetile a unei liste de
+    // douazeci de capturi ar declansa douazeci de joburi de zeci de secunde fiecare.
+    // Rasterele se schimba imediat, fiindca e doar setTiles.
+    applyPairToMap(b, t);
+    if (b && t) {
+      const computed = isPairComputed(nextBase, nextTarget);
+      announceStatus(
+        `Referință: ${dataLunga(b.captured_on)}. Comparat: ${dataLunga(t.captured_on)}. ` +
+          (computed
+            ? 'Comparația este calculată.'
+            : 'Comparația nu a fost încă calculată. Folosiți butonul Compară zborurile.')
+      );
+    }
+  };
+
+  const runComparison = async () => {
+    const b = timelineCaptures.find((c) => c.id === baselineId);
+    const t = timelineCaptures.find((c) => c.id === targetId);
+    if (!b || !t || isComparing) return;
+    setIsComparing(true);
+    announceStatus(
+      `Se calculează comparația între zborul din ${dataLunga(b.captured_on)} și zborul din ` +
+        `${dataLunga(t.captured_on)}. Operațiunea poate dura până la un minut. ` +
+        'Rezultatele afișate rămân cele ale comparației anterioare până la terminare.'
+    );
+    try {
+      const body = new FormData();
+      body.append('base', baselineId);
+      body.append('target', targetId);
+      body.append('top_n', '50');
+      const res = await fetch(`${API_BASE}/sites/${DEMO_SITE}/comparisons`, { method: 'POST', body });
+      if (!res.ok) {
+        announceError('Comparația a eșuat. Încercați din nou peste câteva momente.');
+        return;
+      }
+      const { id } = await res.json();
+
+      // Detectia ruleaza ca task de fundal, deci raspunsul la POST spune doar ca a pornit.
+      // Se interogheaza pana la terminare, cu mesaje periodice la 10 secunde — nu la
+      // fiecare interogare, ceea ce ar produce zeci de anunturi pentru un singur job.
+      const started = Date.now();
+      let lastBeat = 0;
+      let detail = null;
+      for (let i = 0; i < 180; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 1000));
+        // eslint-disable-next-line no-await-in-loop
+        const poll = await fetch(`${API_BASE}/comparisons/${id}`);
+        if (poll.ok) {
+          // eslint-disable-next-line no-await-in-loop
+          detail = await poll.json();
+          if (detail.status === 'done' || detail.status === 'failed') break;
+        }
+        const elapsed = Math.round((Date.now() - started) / 1000);
+        if (elapsed >= lastBeat + 10) {
+          lastBeat = elapsed - (elapsed % 10);
+          announceStatus(`Comparația este în curs. Au trecut ${secundeText(lastBeat)}.`);
+        }
+      }
+
+      if (detail && detail.status === 'done' && detail.result) {
+        applyGeoJsonResult(detail.result, true);
+        setComputedPairs((prev) => new Set(prev).add(pairKey(baselineId, targetId)));
+        announceStatus(
+          `Comparație finalizată. ${anomaliiDetectate(detail.result.features?.length || 0)}.`
+        );
+      } else {
+        announceError(`Comparația a eșuat: ${detail?.error_message || 'cauză necunoscută'}. Încercați din nou peste câteva momente.`);
+      }
+    } catch {
+      announceError('Eroare de rețea la calcularea comparației. Verificați conexiunea și încercați din nou.');
+    } finally {
+      setIsComparing(false);
+    }
+  };
+
+  // Numele ramane static; datele stau in aria-valuetext. Un control al carui NUME se schimba
+  // cand misti alt control e dezorientant, iar NVDA reanunta schimbarile de nume.
+  const mixText = (o) => {
+    const p = Math.round(o * 100);
+    const b = timelineCaptures.find((c) => c.id === baselineId);
+    const t = timelineCaptures.find((c) => c.id === targetId);
+    if (!b || !t) {
+      return `${p}% zbor curent, ${100 - p}% zbor inițial`;
+    }
+    if (p === 0) return `Doar zborul de referință din ${dataLunga(b.captured_on)}`;
+    if (p === 100) return `Doar zborul comparat din ${dataLunga(t.captured_on)}`;
+    return `${p}% zbor comparat din ${dataLunga(t.captured_on)}, ${100 - p}% zbor de referință din ${dataLunga(b.captured_on)}`;
   };
 
   const loadFlightList = async () => {
@@ -511,7 +657,7 @@ export default function App() {
           const doc = await loadTruth(fid, flights.find((f) => f.id === fid)?.has_truth);
           const rec = recallSentence(doc, data.result.features);
           announceStatus(
-            `Situl ${fid} a fost încărcat. ${anomaliiText(n)} detectate. ` +
+            `Situl ${fid} a fost încărcat. ${anomaliiDetectate(n)}. ` +
               (rec || 'Acest zbor nu are schimbări cunoscute de referință, deci acoperirea nu poate fi calculată.')
           );
         } else {
@@ -673,7 +819,7 @@ export default function App() {
     const m = anomalyModel;
     if (!m) return '';
     const parts = [
-      `${anomaliiText(m.count)} detectate pe o suprafață de aproximativ ` +
+      `${anomaliiDetectate(m.count)} pe o suprafață de aproximativ ` +
         `${Math.round(m.widthM)} pe ${metriText(Math.round(m.heightM))}.`,
       `Scorurile merg de la ${fmt2(m.minScore)} la ${fmt2(m.maxScore)}.`,
     ];
@@ -765,7 +911,7 @@ export default function App() {
             const doc = await loadTruth('test');
             const rec = recallSentence(doc, data.result.features);
             announceStatus(
-              `Detecție finalizată. ${anomaliiText(data.result.features?.length || 0)} detectate. ` +
+              `Detecție finalizată. ${anomaliiDetectate(data.result.features?.length || 0)}. ` +
                 (rec ? rec + ' ' : '') +
                 'Detaliile sunt în secțiunea Anomalii detectate.'
             );
@@ -798,7 +944,7 @@ export default function App() {
                   const doc = await loadTruth('test');
                   const rec = recallSentence(doc, resultData.result.features);
                   announceStatus(
-                    `Detecție finalizată. ${anomaliiText(resultData.result.features?.length || 0)} detectate. ` +
+                    `Detecție finalizată. ${anomaliiDetectate(resultData.result.features?.length || 0)}. ` +
                       (rec ? rec + ' ' : '') +
                       'Detaliile sunt în secțiunea Anomalii detectate.'
                   );
@@ -1718,27 +1864,65 @@ export default function App() {
         </dialog>
 
         {/* Floating Bottom Slider */}
-        <div className="slider-widget" role="group" aria-label="Comparație între zboruri">
-          <div className="slider-labels">
-            <span className="label-before">Zbor inițial (T0)</span>
-            <span className="slider-value">Zbor curent: {Math.round(opacity * 100)}%</span>
-            <span className="label-after">Zbor curent (T1)</span>
-          </div>
-          <div className="slider-control-row">
-            <input
-              id="opacity-slider"
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={opacity}
-              onChange={handleSliderChange}
-              className="opacity-slider"
-              aria-label="Amestec între zborul inițial T0 și zborul curent T1"
-              aria-valuetext={`${Math.round(opacity * 100)}% zbor curent T1, ${100 - Math.round(opacity * 100)}% zbor inițial T0`}
+        <section className="slider-widget compare-widget" aria-labelledby="cmp-heading">
+          <h2 id="cmp-heading">Comparație zboruri</h2>
+
+          {timelineCaptures.length >= 2 ? (
+            <Timeline
+              captures={timelineCaptures}
+              baselineId={baselineId}
+              targetId={targetId}
+              onSelect={handleCaptureSelect}
+              isComputed={isPairComputed}
+              pairComputed={isPairComputed(baselineId, targetId)}
+              isComparing={isComparing}
+              onCompare={runComparison}
+              opacityControl={
+                <div className="slider-control-row">
+                  <label htmlFor="opacity-slider">Amestec între zboruri</label>
+                  <input
+                    id="opacity-slider"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={opacity}
+                    onChange={handleSliderChange}
+                    className="opacity-slider"
+                    aria-valuetext={mixText(opacity)}
+                  />
+                  <span className="slider-value" aria-hidden="true">
+                    {Math.round(opacity * 100)}%
+                  </span>
+                </div>
+              }
             />
-          </div>
-        </div>
+          ) : (
+            <>
+              <div className="slider-labels">
+                <span className="label-before">Zbor inițial (T0)</span>
+                <span className="slider-value">Zbor curent: {Math.round(opacity * 100)}%</span>
+                <span className="label-after">Zbor curent (T1)</span>
+              </div>
+              <div className="slider-control-row">
+                <label htmlFor="opacity-slider" className="sr-only">
+                  Amestec între zboruri
+                </label>
+                <input
+                  id="opacity-slider"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={opacity}
+                  onChange={handleSliderChange}
+                  className="opacity-slider"
+                  aria-valuetext={mixText(opacity)}
+                />
+              </div>
+            </>
+          )}
+        </section>
       </main>
     </div>
   );

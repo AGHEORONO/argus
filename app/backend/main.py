@@ -90,8 +90,9 @@ def init_db():
 async def lifespan(app: FastAPI):
     init_db()
     try:
-        from app.backend.provision import seed_demo_flight
+        from app.backend.provision import seed_demo_flight, seed_demo_site
         seed_demo_flight(get_db)
+        seed_demo_site(get_db)
     except Exception as e:
         print(f"Demo seeding notice: {e}")
     yield

@@ -269,3 +269,61 @@ def seed_demo_flight(get_db_func):
         )
         conn.commit()
         logger.info("Demo flight 'test' seeded successfully.")
+
+
+def seed_demo_site(get_db_func):
+    """Seed a site with four dated captures, so the timeline has a real progression.
+
+    Built from the demo pair: the baseline raster is reused for the first capture, and the
+    modified one for the last, with two intermediate captures carrying a growing subset of
+    the injected changes. That gives a timeline where each step adds something, which is
+    what a monitored construction site actually looks like.
+    """
+    import shutil
+    from datetime import date
+
+    site_id = "sit_demo"
+    site_root = os.path.join("data", "sites", site_id)
+    plan = [
+        ("2026-03-10", "ridicare inițială", BEFORE_PATH),
+        ("2026-05-18", "primăvară", BEFORE_PATH),
+        ("2026-07-02", "vară", AFTER_PATH),
+        ("2026-09-21", "toamnă", AFTER_PATH),
+    ]
+
+    with get_db_func() as conn:
+        existing = conn.execute(
+            "SELECT COUNT(*) AS n FROM captures WHERE site_id = ?", (site_id,)
+        ).fetchone()
+        if existing and existing["n"] >= len(plan):
+            logger.info("Demo site already seeded.")
+            return
+
+        conn.execute(
+            "INSERT INTO sites (id, name) VALUES (?, ?) ON CONFLICT(id) DO NOTHING",
+            (site_id, "Sit demonstrativ"),
+        )
+
+        for when, label, source in plan:
+            if not os.path.exists(source):
+                logger.warning("Demo site: %s missing, skipping %s", source, when)
+                continue
+            capture_id = f"{when}_demo"
+            folder = os.path.join(site_root, capture_id)
+            os.makedirs(folder, exist_ok=True)
+            raster = os.path.join(folder, "raster.tif")
+            cog = os.path.join(folder, "raster.cog.tif")
+            if not os.path.exists(raster):
+                shutil.copy(source, raster)
+            if not os.path.exists(cog):
+                build_cog(raster, cog)
+            conn.execute(
+                """
+                INSERT INTO captures (id, site_id, captured_on, label, raster_path, cog_path)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET cog_path = excluded.cog_path
+                """,
+                (capture_id, site_id, when, label, raster, cog),
+            )
+        conn.commit()
+    logger.info("Demo site seeded with %d captures.", len(plan))

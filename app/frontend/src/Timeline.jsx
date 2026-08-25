@@ -1,34 +1,31 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React from 'react';
+
+import { dataLunga, intervalText, zileIntre } from './timeline-layout';
 
 /**
- * Pick two captures out of N along a time axis.
+ * Pick two captures out of N and compare them.
  *
- * Two native radio groups, not a two-thumb slider. The reason is geometry before ARIA:
- * an <input type="range"> moves its thumb linearly through value space, so it can either
- * step one capture per arrow press (forcing evenly spaced ticks) or place ticks at true
- * elapsed time (forcing arrows to step by one day). It cannot do both, and irregular
- * flight intervals need both. Radios can: each tick is its own element, positioned
- * independently, and the ordering constraint is enforced by `disabled` — which the user
- * agent honours for clicks, focus and arrow-key wrapping alike, so there is no clamping
- * code to get wrong.
+ * Two native `<select>`s plus an axis that is pure decoration. The axis is
+ * `aria-hidden` and has no click targets, which is what makes WCAG 2.5.8 Target Size
+ * inapplicable rather than merely excused — with N flights on a multi-year axis, per-tick
+ * targets would be unhittable, and nudging them apart to 24px would falsify the very
+ * proportionality the axis exists to show.
+ *
+ * A range input was never an option: its thumb moves in equal pixel steps, while ticks sit
+ * at true elapsed time. Making a thumb land on a proportional tick means hand-rendering
+ * track and thumb — paying the full cost of a custom widget and keeping none of the
+ * native behaviour.
  */
 
-import {
-  MIN_TICK_PX,
-  dataLunga,
-  intervalText,
-  layoutTicks,
-  needsVerticalLayout,
-  zileIntre,
-} from './timeline-layout';
-
-/** Accessible name for one capture. Never an ISO string: a Romanian voice reads
- *  "2026-03-12" as "două mii douăzeci și șase minus zero trei minus doisprezece". */
-function captureName(capture, computed) {
+/** Option text is the announcement — a <select> has no aria-valuetext. */
+function optionText(capture, computedAgainstOther, disabled) {
   const parts = [dataLunga(capture.captured_on)];
   if (capture.label) parts.push(capture.label);
-  parts.push(computed ? 'cu rezultat' : 'fără rezultat');
-  if (!capture.has_tiles) parts.push('fără imagini pe hartă');
+  // The ordering rule is stated once in the description; repeating it on every disabled
+  // option would make arrowing through the list unbearable.
+  if (!disabled) {
+    parts.push(computedAgainstOther ? 'comparație calculată' : 'comparație necalculată');
+  }
   return parts.join(', ');
 }
 
@@ -36,131 +33,154 @@ export default function Timeline({
   captures,
   baselineId,
   targetId,
-  onChange,
-  computedPairs,
-  children,
+  onSelect,
+  isComputed,
+  onCompare,
+  isComparing,
+  pairComputed,
+  opacityControl,
 }) {
-  const trackRef = useRef(null);
-  const [width, setWidth] = useState(0);
-
-  useEffect(() => {
-    const el = trackRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return undefined;
-    // Container width, not a viewport media query: 1.4.10 is defined at 400% zoom of a
-    // 1280px viewport, which a viewport query can miss entirely.
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) setWidth(entry.contentRect.width);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const dates = useMemo(() => captures.map((c) => c.captured_on), [captures]);
-  const vertical = width > 0 && needsVerticalLayout(captures.length, width);
-  const xs = useMemo(
-    () => (vertical || width === 0 ? [] : layoutTicks(dates, Math.max(0, width - MIN_TICK_PX))),
-    [dates, width, vertical]
-  );
+  if (!captures || captures.length < 2) {
+    return (
+      <p className="help-text">
+        {captures && captures.length === 1
+          ? 'Acest sit are un singur zbor înregistrat. Comparația necesită cel puțin două zboruri.'
+          : 'Acest sit nu are încă zboruri înregistrate.'}
+      </p>
+    );
+  }
 
   const baseIndex = captures.findIndex((c) => c.id === baselineId);
   const targetIndex = captures.findIndex((c) => c.id === targetId);
-
-  const isComputed = (a, b) => {
-    if (!a || !b) return false;
-    const key = [a, b].sort().join('|');
-    return computedPairs.has(key);
-  };
-
-  const renderGroup = (which) => {
-    const isBaseline = which === 'baseline';
-    const selected = isBaseline ? baselineId : targetId;
-    const legendId = `timeline-${which}-legend`;
-    const helpId = `timeline-${which}-help`;
-
-    return (
-      <fieldset className={`timeline-group timeline-group-${which}`}>
-        <legend id={legendId}>{isBaseline ? 'Zbor de referință' : 'Zbor comparat'}</legend>
-        <p id={helpId} className="help-text timeline-help">
-          {isBaseline
-            ? 'Zborul mai vechi din pereche. Schimbările se măsoară față de el.'
-            : 'Zborul mai nou din pereche.'}{' '}
-          „cu rezultat” înseamnă că perechea formată cu celălalt zbor selectat are deja o
-          comparație calculată.
-        </p>
-        <div className={`timeline-track ${vertical ? 'is-vertical' : ''}`} ref={isBaseline ? trackRef : null}>
-          {captures.map((capture, i) => {
-            // The user agent enforces the ordering: a disabled radio cannot be focused,
-            // clicked, or reached by arrow keys, and native arrow-wrap skips it. No input
-            // path can produce an out-of-order or self-comparing pair.
-            const disabled = isBaseline ? i >= targetIndex : i <= baseIndex;
-            const other = isBaseline ? targetId : baselineId;
-            const checked = capture.id === selected;
-            return (
-              <div
-                key={capture.id}
-                className="timeline-tick-slot"
-                style={vertical ? undefined : { left: `${xs[i] ?? 0}px` }}
-              >
-                <input
-                  type="radio"
-                  className="timeline-tick"
-                  id={`tick-${which}-${capture.id}`}
-                  name={`capture-${which}`}
-                  value={capture.id}
-                  checked={checked}
-                  disabled={disabled}
-                  aria-describedby={helpId}
-                  onChange={() => onChange(which, capture.id)}
-                />
-                <label htmlFor={`tick-${which}-${capture.id}`}>
-                  <span className="sr-only">{captureName(capture, isComputed(capture.id, other))}</span>
-                  <span
-                    className={`tick-mark ${isComputed(capture.id, other) ? 'is-computed' : 'is-open'}`}
-                    aria-hidden="true"
-                  />
-                  {vertical && (
-                    <span className="tick-row-text" aria-hidden="true">
-                      {dataLunga(capture.captured_on)}
-                      {capture.label ? ` — ${capture.label}` : ''}
-                      {isComputed(capture.id, other) ? ' · cu rezultat' : ''}
-                    </span>
-                  )}
-                </label>
-              </div>
-            );
-          })}
-        </div>
-      </fieldset>
-    );
-  };
-
   const base = captures[baseIndex];
   const target = captures[targetIndex];
   const gap = base && target ? zileIntre(base.captured_on, target.captured_on) : null;
 
+  const first = new Date(`${captures[0].captured_on}T00:00:00Z`).getTime();
+  const last = new Date(`${captures[captures.length - 1].captured_on}T00:00:00Z`).getTime();
+  const span = last - first;
+  const pct = (iso) => {
+    if (span <= 0) return 0;
+    return ((new Date(`${iso}T00:00:00Z`).getTime() - first) / span) * 100;
+  };
+
+  const renderSelect = (which) => {
+    const isBaseline = which === 'baseline';
+    const selected = isBaseline ? baselineId : targetId;
+    const other = isBaseline ? targetId : baselineId;
+    const id = `capture-${which}`;
+    return (
+      <div className="capture-picker">
+        <label htmlFor={id}>{isBaseline ? 'Zbor de referință' : 'Zbor comparat'}</label>
+        <select
+          id={id}
+          className="switcher-select"
+          value={selected || ''}
+          aria-describedby="order-rule"
+          onChange={(e) => onSelect(which, e.target.value)}
+        >
+          {captures.map((capture, i) => {
+            // Invalid options are `disabled`, so the user agent enforces the ordering at
+            // click, focus and arrow-key level alike. There is no clamping code to get wrong,
+            // and self-comparison becomes unreachable.
+            const disabled = isBaseline ? i >= targetIndex : i <= baseIndex;
+            return (
+              <option key={capture.id} value={capture.id} disabled={disabled}>
+                {optionText(capture, isComputed(capture.id, other), disabled)}
+              </option>
+            );
+          })}
+        </select>
+      </div>
+    );
+  };
+
   return (
     <>
-      <div className="timeline-readout">
-        <span>
-          <span aria-hidden="true" className="readout-caps">REFERINȚĂ </span>
-          <time dateTime={base?.captured_on}>{dataLunga(base?.captured_on)}</time>
-        </span>
-        {gap !== null && (
-          <span className="readout-gap">
-            <span aria-hidden="true">Δ </span>
-            {intervalText(gap)}
-          </span>
+      {/* Decoration only. Every fact it carries — order, intervals, computed state — is
+          also in the option text and the summary line below, which is what keeps hiding it
+          on narrow screens from losing information. */}
+      <div className="timeline-axis" aria-hidden="true">
+        <div className="axis-track" />
+        {base && target && (
+          <div
+            className="axis-range"
+            style={{
+              left: `${Math.min(pct(base.captured_on), pct(target.captured_on))}%`,
+              width: `${Math.abs(pct(target.captured_on) - pct(base.captured_on))}%`,
+            }}
+          />
         )}
-        <span>
-          <span aria-hidden="true" className="readout-caps">COMPARAT </span>
-          <time dateTime={target?.captured_on}>{dataLunga(target?.captured_on)}</time>
+        {captures.map((capture) => {
+          const computed = isComputed(capture.id, capture.id === baselineId ? targetId : baselineId);
+          const isEnd = capture.id === baselineId || capture.id === targetId;
+          return (
+            <span
+              key={capture.id}
+              className={`axis-tick ${computed ? 'is-computed' : 'is-open'} ${isEnd ? 'is-endpoint' : ''}`}
+              style={{ left: `${pct(capture.captured_on)}%` }}
+            />
+          );
+        })}
+        <span className="axis-end axis-end-left">{dataLunga(captures[0].captured_on)}</span>
+        <span className="axis-end axis-end-right">
+          {dataLunga(captures[captures.length - 1].captured_on)}
         </span>
       </div>
 
-      {renderGroup('baseline')}
-      {renderGroup('target')}
+      <div className="capture-pickers">
+        {renderSelect('baseline')}
+        {renderSelect('target')}
+      </div>
 
-      {children}
+      <p id="order-rule" className="help-text">
+        Zborul de referință este întotdeauna cel anterior. Zborurile care ar inversa ordinea
+        nu pot fi selectate. Poziția pe axă este proporțională cu timpul scurs.
+      </p>
+
+      {/* Summary before the button: "you chose X and Y, 49 days apart, not computed" is the
+          narrative order. Plain paragraph, not a live region — the sr-only status region
+          already carries the same sentence and two would double-speak. */}
+      <p className="pair-summary">
+        {base && target && (
+          <>
+            Referință: <time dateTime={base.captured_on}>{dataLunga(base.captured_on)}</time>.
+            {' '}Comparat: <time dateTime={target.captured_on}>{dataLunga(target.captured_on)}</time>.
+            {' '}Interval de {intervalText(gap)}.{' '}
+            {pairComputed ? 'Comparația este calculată.' : 'Comparația nu a fost încă calculată.'}
+          </>
+        )}
+      </p>
+
+      <div className="compare-row">
+        <button
+          type="button"
+          className="btn btn-primary"
+          aria-disabled={pairComputed || isComparing}
+          aria-busy={isComparing}
+          aria-describedby={pairComputed ? 'compare-help' : undefined}
+          onClick={() => {
+            if (pairComputed || isComparing) return;
+            onCompare();
+          }}
+        >
+          Compară zborurile
+        </button>
+        {opacityControl}
+      </div>
+
+      {pairComputed && (
+        <p id="compare-help" className="help-text">
+          Comparația pentru această pereche este deja calculată.
+        </p>
+      )}
+
+      {isComparing && (
+        <div className="progress-group">
+          <label htmlFor="compare-progress">Se calculează comparația…</label>
+          <progress id="compare-progress" className="native-progress" />
+        </div>
+      )}
     </>
   );
 }
