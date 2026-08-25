@@ -102,6 +102,7 @@ export default function App() {
   // ascunde — tacerea ar face datele absente sa semene cu un scor de zero.
   const [truth, setTruth] = useState(null);
   const [showKnown, setShowKnown] = useState(false);
+  const [showCandidates, setShowCandidates] = useState(true);
   const sheetRef = useRef(null);
   const sheetHeadingRef = useRef(null);
   const openSheetBtnRef = useRef(null);
@@ -573,6 +574,21 @@ export default function App() {
       on
         ? `Cele ${schimbariText(n)} sunt acum afișate pe hartă, cu contur galben întrerupt. Lista lor se află în secțiunea Schimbări cunoscute.`
         : 'Schimbările cunoscute nu mai sunt afișate pe hartă.'
+    );
+  };
+
+  const toggleCandidates = (on) => {
+    setShowCandidates(on);
+    const map = mapRef.current;
+    if (map) {
+      for (const id of ['anomalies-fill', 'anomalies-casing', 'anomalies-line']) {
+        if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+      }
+    }
+    announceStatus(
+      on
+        ? `${anomaliiText(anomalies.length)} candidate sunt din nou afișate pe hartă.`
+        : 'Anomaliile candidate au fost ascunse. Harta arată acum doar ortofotoplanul.'
     );
   };
 
@@ -1493,6 +1509,23 @@ export default function App() {
                 fi calculată.
               </p>
             )}
+
+            {/* Ascunderea candidatilor lasa ortofotoplanul curat, ca sa se vada exact ce s-a
+                schimbat sub ei — cu sliderul, diferenta devine vizibila direct. */}
+            <div className="known-toggle">
+              <input
+                type="checkbox"
+                id="show-candidates"
+                className="known-toggle-input candidates-toggle-input"
+                checked={showCandidates}
+                onChange={(e) => toggleCandidates(e.target.checked)}
+                aria-describedby="candidates-toggle-help"
+              />
+              <label htmlFor="show-candidates">Afișează anomaliile candidate</label>
+            </div>
+            <p id="candidates-toggle-help" className="help-text">
+              Dezactivează ca să vezi ortofotoplanul fără marcaje și să compari cu sliderul.
+            </p>
 
             {/* Rezumatul e singurul lucru prezent permanent in arborele de accesibilitate:
                 tabelul e intr-un <dialog> inchis. Deci trebuie sa stea singur in picioare. */}
