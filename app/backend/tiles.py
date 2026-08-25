@@ -9,15 +9,20 @@ import numpy as np
 from PIL import Image
 import rasterio
 from rasterio.enums import Resampling
-from rasterio.windows import from_bounds
+from rasterio.transform import from_bounds as from_bounds_transform
+from rasterio.vrt import WarpedVRT
+from rasterio.warp import transform_bounds
 from fastapi import APIRouter, Response
 
 router = APIRouter()
 tms = morecantile.tms.get("WebMercatorQuad")
+MERCATOR = "EPSG:3857"
 
-# Dataset cache to avoid opening files repeatedly per request
+# Dataset cache to avoid opening files repeatedly per request.
+# Keyed by layer -> (source, warped view, mtime of the file when it was opened).
 _cache_lock = threading.Lock()
-_dataset_cache: Dict[str, rasterio.DatasetReader] = {}
+_dataset_cache: Dict[str, tuple] = {}
+_CACHE_MAX = 16
 
 
 def encode_png(data: np.ndarray) -> bytes:
@@ -58,67 +63,108 @@ def resolve_layer_path(layer: str) -> Optional[str]:
     return None
 
 
-def get_cached_dataset(layer: str) -> Optional[rasterio.DatasetReader]:
-    """Get or open a cached rasterio dataset handle."""
-    with _cache_lock:
-        if layer in _dataset_cache:
-            ds = _dataset_cache[layer]
-            if not ds.closed:
-                return ds
+def _close_entry(entry) -> None:
+    try:
+        entry[0].close()
+    except Exception:
+        pass
 
-        path = resolve_layer_path(layer)
-        if not path:
+
+def invalidate_layer_cache(prefix: str = "") -> int:
+    """Close and drop cached handles whose layer starts with `prefix` ("" clears all).
+
+    Called before a COG is rebuilt: without it the old dataset stays open and keeps being
+    served, so corrected imagery never reaches the map. On Windows the open handle also
+    makes the file undeletable.
+    """
+    with _cache_lock:
+        keys = [k for k in _dataset_cache if k.startswith(prefix)] if prefix else list(_dataset_cache)
+        for k in keys:
+            _close_entry(_dataset_cache.pop(k))
+        return len(keys)
+
+
+def get_cached_dataset(layer: str):
+    """Get a cached view of the layer, reprojected to Web Mercator.
+
+    Returns the raw source; reprojection happens per tile in get_tile, because a VRT
+    aligned to the tile grid also handles tiles that hang off the edge of the raster.
+    """
+    path = resolve_layer_path(layer)
+    if not path:
+        return None
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return None
+
+    with _cache_lock:
+        entry = _dataset_cache.get(layer)
+        # mtime in the key means a rebuilt COG invalidates itself; no manual bookkeeping.
+        if entry and entry[1] == mtime and not entry[0].closed:
+            return entry[0]
+        if entry:
+            _close_entry(_dataset_cache.pop(layer))
+
+        try:
+            src = rasterio.open(path)
+        except Exception:
             return None
 
-        ds = rasterio.open(path)
-        _dataset_cache[layer] = ds
-        return ds
+        if len(_dataset_cache) >= _CACHE_MAX:
+            _close_entry(_dataset_cache.pop(next(iter(_dataset_cache))))
+        _dataset_cache[layer] = (src, mtime)
+        return src
 
 
 def get_tile(layer: str, z: int, x: int, y: int) -> bytes:
-    """Retrieve and render a 256x256 PNG tile from a cached raster dataset."""
-    ds = get_cached_dataset(layer)
-    if ds is None:
+    """Render a 256x256 PNG tile, reprojecting whatever CRS the raster is in.
+
+    Rasters arrive in whatever CRS the photogrammetry produced — UTM for anything ODM,
+    Pix4D or Agisoft emit. Tiles are addressed in Web Mercator. The old code compared tile
+    bounds in degrees against the raster's bounds in native units, which was correct only
+    by accident on an EPSG:4326 demo raster; every real orthophoto served blank tiles with
+    a cheerful HTTP 200.
+    """
+    src = get_cached_dataset(layer)
+    if src is None:
         return EMPTY_TILE_PNG
 
     tile = morecantile.Tile(x=x, y=y, z=z)
-    tile_bounds = tms.bounds(tile)
+    tile_bounds = tms.xy_bounds(tile)
 
     try:
-        # Check bounding box intersection in WGS84
-        rb = ds.bounds
+        # Intersectia se verifica in Web Mercator, deci limitele sursei se transforma acolo.
+        west, south, east, north = transform_bounds(src.crs, MERCATOR, *src.bounds)
         if (
-            tile_bounds.left > rb.right
-            or tile_bounds.right < rb.left
-            or tile_bounds.bottom > rb.top
-            or tile_bounds.top < rb.bottom
+            tile_bounds.left >= east
+            or tile_bounds.right <= west
+            or tile_bounds.bottom >= north
+            or tile_bounds.top <= south
         ):
             return EMPTY_TILE_PNG
 
-        window = from_bounds(
-            tile_bounds.left,
-            tile_bounds.bottom,
-            tile_bounds.right,
-            tile_bounds.top,
-            transform=ds.transform,
+        # Un VRT aliniat exact pe tile: reproiecteaza si umple cu transparent in afara
+        # rasterului. WarpedVRT nu accepta citiri boundless, iar exceptia aia era inghitita
+        # de except-ul de mai jos si iesea tile gol, tacut.
+        dst_transform = from_bounds_transform(
+            tile_bounds.left, tile_bounds.bottom, tile_bounds.right, tile_bounds.top, 256, 256
         )
-
-        data = ds.read(
-            window=window,
-            out_shape=(ds.count, 256, 256),
+        with WarpedVRT(
+            src,
+            crs=MERCATOR,
+            transform=dst_transform,
+            width=256,
+            height=256,
             resampling=Resampling.bilinear,
-            boundless=True,
-            fill_value=0,
-        )
+        ) as vrt:
+            data = vrt.read(out_shape=(src.count, 256, 256))
+            alpha = vrt.dataset_mask()
 
         if data.shape[0] == 3:
-            mask = (data > 0).any(axis=0).astype(np.uint8) * 255
-            rgba = np.vstack([data, mask[np.newaxis, ...]])
+            rgba = np.vstack([data, alpha[np.newaxis, ...].astype(np.uint8)])
             return encode_png(rgba)
-        elif data.shape[0] == 4:
-            return encode_png(data)
-        else:
-            return encode_png(data)
+        return encode_png(data)
 
     except Exception:
         return EMPTY_TILE_PNG

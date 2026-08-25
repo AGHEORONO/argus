@@ -142,25 +142,27 @@ def run_detection_job(flight_id: str, before_path: str, after_path: str, top_n: 
         detection_geojson = detect_changes(before_path, after_path, top_n=top_n)
         result_json = json.dumps(detection_geojson)
 
+        # COG-urile se construiesc INAINTE de a marca done: un client care asteapta done si
+        # apoi comuta harta prindea altfel un zbor fara tile-uri, pentru cateva secunde.
+        cog_warning = None
+        try:
+            build_flight_cogs(flight_id, before_path, after_path)
+        except Exception as cog_exc:
+            # Detectia a reusit; lipsa tile-urilor nu face zborul un esec, dar nici nu se
+            # trece sub tacere — altfel API-ul raporteaza succes cu harta goala.
+            cog_warning = f"Detection succeeded but map imagery could not be prepared: {cog_exc}"
+            logger.warning("COG build failed for flight %s: %s", flight_id, cog_exc)
+
         with get_db() as conn:
             conn.execute(
                 """
                 UPDATE flights
-                SET status = 'done', result = ?, error_message = NULL, updated_at = CURRENT_TIMESTAMP
+                SET status = 'done', result = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
-                (result_json, flight_id),
+                (result_json, cog_warning, flight_id),
             )
             conn.commit()
-
-        # Tile-urile se servesc din COG, si pana acum se construiau doar pentru rasterele
-        # demo — imaginile unui zbor urcat nu ajungeau niciodata pe harta. Se construiesc
-        # dupa detectie, nu la upload, ca sa nu blocheze cererea de incarcare.
-        try:
-            build_flight_cogs(flight_id, before_path, after_path)
-        except Exception as cog_exc:
-            # Detectia a reusit; lipsa tile-urilor nu trebuie sa transforme zborul in esec.
-            logger.warning("COG build failed for flight %s: %s", flight_id, cog_exc)
 
     except Exception as exc:
         with get_db() as conn:
@@ -179,10 +181,18 @@ def build_flight_cogs(flight_id: str, before_path: str, after_path: str):
     """Build tile-servable COGs for an uploaded flight, downsampling to fit memory."""
     from app.backend.provision import MAX_DEMO_DIM, build_cog, downsample_if_needed
 
+    from app.backend.tiles import invalidate_layer_cache
+
     for layer, src in (("before", before_path), ("after", after_path)):
         dst = flight_dir(flight_id, f"{layer}.cog.tif")
-        if os.path.exists(dst):
+        # Se reconstruieste cand sursa e mai noua. Varianta veche sarea peste orice COG
+        # existent, deci dupa o corectie de imagini operatorul vedea rasterul VECHI cu
+        # anomaliile NOI desenate peste, raportat ca status done.
+        if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(src):
             continue
+        # Handle-ul deschis din cache tine fisierul si il serveste in continuare; pe Windows
+        # il face si nesters.
+        invalidate_layer_cache(f"{flight_id}/{layer}")
         downsample_if_needed(src, MAX_DEMO_DIM)
         build_cog(src, dst)
         logger.info("Built %s", dst)

@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import rasterio
 from rasterio.transform import xy
+from rasterio.warp import transform as warp_transform
 from rasterio.windows import Window
 from shapely.geometry import Polygon, mapping
 from sklearn.ensemble import IsolationForest
@@ -37,6 +38,7 @@ def detect_changes(
     after_path: str,
     patch: int = 32,
     top_n: int = 50,
+    min_score: float = 0.5,
     max_samples: int = 10000,
     n_estimators: int = 100,
     random_state: int = 42,
@@ -89,7 +91,14 @@ def detect_changes(
 
     # Rank patches by anomaly score descending
     sorted_indices = np.argsort(anomaly_scores)[::-1]
-    top_indices = sorted_indices[:top_n]
+    # Un petic care nu iese deloc in evidenta primeste exact 0.5 — iesirea degenerata a
+    # Isolation Forest. Pana acum se intorceau oricum top_n candidati, deci pe doua rastere
+    # identice aplicatia raporta anomalii cu incredere. Un rezultat gol e un raspuns valid.
+    # Toleranta e obligatorie, nu cosmetica: pe rastere identice scorul iese
+    # 0.5000000000000002, deci o comparatie stricta cu 0.5 il lasa sa treaca si aplicatia
+    # raporteaza cinci anomalii inexistente.
+    ranked = [i for i in sorted_indices if anomaly_scores[i] > min_score + 1e-9]
+    top_indices = ranked[:top_n]
 
     features: List[Dict[str, Any]] = []
     for rank, idx in enumerate(top_indices, start=1):
@@ -104,12 +113,21 @@ def detect_changes(
         x0, y0 = xy(transform, r0, c0, offset="ul")
         x1, y1 = xy(transform, r1, c1, offset="ul")
 
+        # RFC 7946 cere WGS84, iar frontendul (harta si descrierea in cuvinte) presupune
+        # grade. Fara reproiectie, un ortofotoplan in UTM producea coordonate de ordinul
+        # sutelor de mii — afisate ca "4919103 grade nord", fara nicio eroare.
+        if crs and crs.to_epsg() != 4326:
+            (lon0, lon1), (lat0, lat1) = warp_transform(crs, "EPSG:4326", [x0, x1], [y0, y1])
+        else:
+            lon0, lon1, lat0, lat1 = x0, x1, y0, y1
+
+        # Inel exterior in sens trigonometric, cum cere RFC 7946.
         poly = Polygon([
-            (x0, y0),
-            (x1, y0),
-            (x1, y1),
-            (x0, y1),
-            (x0, y0),
+            (lon0, lat1),
+            (lon1, lat1),
+            (lon1, lat0),
+            (lon0, lat0),
+            (lon0, lat1),
         ])
 
         feature = {
@@ -125,15 +143,12 @@ def detect_changes(
         }
         features.append(feature)
 
-    crs_name = crs.to_string() if crs else "EPSG:4326"
+    # Membrul "crs" a fost scos din specificatie in RFC 7946: GeoJSON e mereu WGS84.
+    # Il pastram doar ca informatie despre sursa, sub alt nume, ca sa nu para o declaratie
+    # de proiectie pentru cine citeste fisierul.
     geojson_doc = {
         "type": "FeatureCollection",
-        "crs": {
-            "type": "name",
-            "properties": {
-                "name": crs_name,
-            },
-        },
+        "source_crs": crs.to_string() if crs else None,
         "features": features,
     }
 

@@ -39,9 +39,18 @@ def test_detect_changes_synthetic():
 
         result = detect_changes(before_path, after_path, patch=32, top_n=2)
         assert result['type'] == 'FeatureCollection'
-        assert len(result['features']) == 2
+        # `len(features) == top_n` was the old assertion here: a restatement of the
+        # argument, which passed even with after == before. What matters is WHERE the
+        # detection landed, so assert that instead.
+        assert result['features'], 'no detection on a patch changed to solid 250'
         assert 'anomaly_score' in result['features'][0]['properties']
         assert result['features'][0]['geometry']['type'] == 'Polygon'
+
+        r0, r1, c0, c1 = result['features'][0]['properties']['pixel_bounds']
+        assert r0 < 32 and c0 < 32, (
+            f'top detection at rows {r0}-{r1}, cols {c0}-{c1}; '
+            'the modified patch is rows 0-32, cols 0-32'
+        )
     finally:
         import os
         if os.path.exists(before_path):
