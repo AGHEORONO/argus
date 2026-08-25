@@ -52,4 +52,12 @@ Cineva care nu vede harta poate parcurge tot fluxul de ingestie, dar nu poate co
 
 ---
 
+## Cum pornești aplicația local
+
+`.\start-local.ps1` dintr-un terminal normal. Pornește backendul, construiește frontendul cu `VITE_API_BASE` către el, îl servește pe `http://127.0.0.1:4173`, și oprește tot la `Ctrl+C`.
+
+De rulat dintr-un terminal propriu, nu dintr-o sesiune de agent: procesele pornite de un agent sunt oprite când se încheie sesiunea lui, ceea ce face imposibilă testarea în ritm propriu.
+
+---
+
 Reluare rapidă pe altă mașină: `git pull`, `setup-skills.ps1`/`.sh` dacă e prima dată, citește [[Jurnal]] de sus în jos pentru context, apoi ia lista de mai sus de la 1.
