@@ -91,6 +91,51 @@ def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> f
     return R * c
 
 
+def _read_relative_altitude(img) -> Optional[float]:
+    """Height above the launch point, in metres, from the drone's XMP block.
+
+    This is the number the overlap maths actually needs. EXIF GPSAltitude is referenced to
+    SEA LEVEL, so over terrain 80 m above sea level a flight at 90 m AGL reports ~170 m and
+    the computed ground footprint comes out nearly twice too wide — which makes the
+    validator approve a flight whose real overlap is far below the threshold. The error is
+    always in the permissive direction, which is the dangerous one.
+
+    DJI writes drone-dji:RelativeAltitude; Autel and Parrot use their own namespaces, so the
+    search is by local tag name rather than by namespace.
+    """
+    try:
+        xmp = img.getxmp()
+    except Exception:
+        return None
+    if not xmp:
+        return None
+
+    wanted = ("relativealtitude", "aboveterrainaltitude", "gpsaltituderelative")
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if isinstance(key, str) and key.split(":")[-1].lower() in wanted:
+                    try:
+                        # DJI writes a signed string such as "+50.30".
+                        return float(str(value).lstrip("+"))
+                    except (TypeError, ValueError):
+                        pass
+                found = walk(value)
+                if found is not None:
+                    return found
+        elif isinstance(node, (list, tuple)):
+            for item in node:
+                found = walk(item)
+                if found is not None:
+                    return found
+        return None
+
+    value = walk(xmp)
+    # A relative altitude at or below zero cannot produce a footprint.
+    return value if value and value > 0 else None
+
+
 def read_photo_metadata(path: str) -> dict:
     """Read photo metadata and EXIF tags without loading full image into memory.
 
@@ -112,6 +157,10 @@ def read_photo_metadata(path: str) -> dict:
         "lat": None,
         "lon": None,
         "altitude": None,
+        # Kept apart deliberately: one is above sea level, the other above the ground, and
+        # only the second one means anything for ground footprint.
+        "altitude_agl": None,
+        "altitude_source": None,
         "focal_length_mm": None,
         "sensor_width_mm": None,
         "camera": None,
@@ -187,6 +236,16 @@ def read_photo_metadata(path: str) -> dict:
                 res["lon"] = _parse_dms(gps_ifd.get(4), gps_ifd.get(3))
                 res["altitude"] = _parse_altitude(gps_ifd.get(6), gps_ifd.get(5))
 
+            agl = _read_relative_altitude(img)
+            if agl is not None:
+                res["altitude_agl"] = agl
+                res["altitude_source"] = "xmp_relative"
+            elif res["altitude"] is not None:
+                # Falling back to sea-level altitude is a guess, and it is recorded as one so
+                # nothing downstream can mistake it for a measurement.
+                res["altitude_agl"] = res["altitude"]
+                res["altitude_source"] = "gps_msl_fallback"
+
     except Exception as e:
         res["error"] = str(e)
 
@@ -235,7 +294,10 @@ def ground_footprint_m(meta: dict) -> Optional[float]:
     if not isinstance(meta, dict):
         return None
 
-    alt = meta.get("altitude")
+    # AGL when the drone recorded it; otherwise the sea-level value, flagged as a fallback.
+    alt = meta.get("altitude_agl")
+    if alt is None:
+        alt = meta.get("altitude")
     focal = meta.get("focal_length_mm")
     sensor_w = meta.get("sensor_width_mm")
 
@@ -290,6 +352,28 @@ def estimate_overlap(meta_a: dict, meta_b: dict) -> Optional[float]:
         return float(overlap)
     except Exception:
         return None
+
+
+def _de(n: int) -> str:
+    """Romanian numerals take the particle "de" when the last two digits are 0 or 20-99."""
+    rest = abs(n) % 100
+    return "de " if rest == 0 or rest >= 20 else ""
+
+
+def _fotografii(n: int) -> str:
+    if n == 1:
+        return "o fotografie"
+    return f"{n} {_de(n)}fotografii"
+
+
+# Verbul trebuie sa se acorde si el, nu doar substantivul: "o fotografie AU suprapunere"
+# e gresit, si exact asta a aparut in interfata cand se acorda doar substantivul.
+def _sunt(n: int) -> str:
+    return "este" if n == 1 else "sunt"
+
+
+def _au(n: int) -> str:
+    return "are" if n == 1 else "au"
 
 
 def validate_flight_photos(paths: list[str], **overrides) -> dict:
@@ -420,26 +504,34 @@ def validate_flight_photos(paths: list[str], **overrides) -> dict:
     elif bad_fraction > max_bad_fraction:
         accepted = False
         reasons = []
+        # Localizate la sursa. Erau in engleza intr-o interfata romaneasca, iar acesta e
+        # cel mai important text din tot raportul: propozitia care spune DE CE a fost
+        # respins setul. O voce sintetica romaneasca citind engleza e neinteligibila, iar
+        # marcarea lang="en" in frontend ar fi fost onesta dar tot inutilizabila.
         if blurry_count > 0:
             reasons.append(
-                f"{blurry_count} of {total} photos are blurry (min blur score: {min_blur_score:.1f})"
+                f"{_fotografii(blurry_count)} din {total} {_sunt(blurry_count)} neclare "
+                f"(scor minim de claritate: {min_blur_score:.0f})"
             )
         if no_gps_count > 0:
             reasons.append(
-                f"{no_gps_count} of {total} photos are missing GPS coordinates"
+                f"{_fotografii(no_gps_count)} din {total} nu {_au(no_gps_count)} coordonate GPS"
             )
         if low_overlap_count > 0:
             reasons.append(
-                f"{low_overlap_count} photos have low overlap with preceding images (min overlap: {min_overlap:.0%})"
+                f"{_fotografii(low_overlap_count)} {_au(low_overlap_count)} suprapunere "
+                f"insuficientă cu fotografia anterioară (minim {min_overlap:.0%})"
             )
         if unreadable_count > 0:
             reasons.append(
-                f"{unreadable_count} of {total} photos are corrupt or unreadable"
+                f"{_fotografii(unreadable_count)} din {total} {_sunt(unreadable_count)} "
+                f"corupte sau ilizibile"
             )
         if not reasons:
             reasons.append(
-                f"{bad_photos_count} of {total} photos ({bad_fraction:.1%}) have quality issues, "
-                f"exceeding maximum threshold of {max_bad_fraction:.1%}"
+                f"{_fotografii(bad_photos_count)} din {total} ({bad_fraction:.0%}) "
+                f"{_au(bad_photos_count)} probleme de calitate, peste pragul maxim de "
+                f"{max_bad_fraction:.0%}"
             )
     else:
         accepted = True

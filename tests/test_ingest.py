@@ -45,7 +45,9 @@ def test_blurry_flight_photo_set(tmp_path):
 
     assert report["accepted"] is False
     assert report["summary"]["blurry"] == 6
-    assert any("blur" in r.lower() for r in report["reasons"])
+    # Motivele sunt in romana: interfata e lang="ro", iar acesta e cel mai important
+    # text din raport.
+    assert any("neclare" in r.lower() for r in report["reasons"])
 
     for p in report["photos"]:
         assert "blurry" in p["issues"]
@@ -77,7 +79,7 @@ def test_low_overlap_flight_photo_set(tmp_path):
 
     assert report["accepted"] is False
     assert report["summary"]["low_overlap"] > 0
-    assert any("overlap" in r.lower() for r in report["reasons"])
+    assert any("suprapunere" in r.lower() for r in report["reasons"])
 
 
 def test_unreadable_corrupt_file_in_set(tmp_path):
@@ -211,3 +213,73 @@ def test_validate_flight_photos_empty_list():
     assert report["accepted"] is False
     assert report["summary"]["total"] == 0
     assert len(report["reasons"]) > 0
+
+
+def test_agl_comes_from_xmp_not_sea_level_exif(tmp_path):
+    """EXIF GPSAltitude is referenced to SEA LEVEL; the overlap maths needs height above
+    GROUND. Over terrain 80 m above sea level, a flight at 90 m AGL reports ~170 m in EXIF
+    and the computed footprint comes out nearly twice too wide — so the validator approves
+    a flight whose real overlap is far below the threshold. The error is always in the
+    permissive direction, which is the dangerous one."""
+    paths = make_photo_set(str(tmp_path / "agl"), n=2, sharp=True, gps=True,
+                           altitude_m=170.0, agl_m=90.0)
+    meta = read_photo_metadata(paths[0])
+
+    assert meta["altitude"] == pytest.approx(170.0, abs=0.5), "EXIF should still carry MSL"
+    assert meta["altitude_agl"] == pytest.approx(90.0, abs=0.5)
+    assert meta["altitude_source"] == "xmp_relative"
+
+    # 90 * 13.2 / 8.8 = 135.0, not 170 * 13.2 / 8.8 = 255.0
+    assert ground_footprint_m(meta) == pytest.approx(135.0, abs=1.0)
+
+
+def test_missing_xmp_falls_back_and_says_so(tmp_path):
+    """A drone that writes no relative altitude still has to be handled, but the guess must
+    be recorded as a guess so nothing downstream treats it as a measurement."""
+    paths = make_photo_set(str(tmp_path / "nogps"), n=2, sharp=True, gps=False)
+    meta = read_photo_metadata(paths[0])
+    assert meta["altitude_agl"] is None or meta["altitude_source"] == "gps_msl_fallback"
+
+
+def test_wrong_altitude_flips_the_overlap_verdict(tmp_path):
+    """The consequence, stated as a test rather than as a comment: with photos 100 m apart,
+    using sea-level altitude turns a failing flight into a passing one."""
+    paths = make_photo_set(str(tmp_path / "flip"), n=4, sharp=True, gps=True,
+                           spacing_m=100.0, altitude_m=170.0, agl_m=90.0)
+    report = validate_flight_photos(paths)
+
+    # True footprint 135 m, spacing 100 m -> overlap 0.26, well under the 0.6 default.
+    assert not report["accepted"]
+    assert report["summary"]["low_overlap"] > 0
+
+    # Had it used the 170 m sea-level figure, footprint would be 255 m and overlap 0.61 —
+    # a pass. Assert the arithmetic, so the reason this test exists cannot be forgotten.
+    assert 1 - (100.0 / 255.0) > 0.6 > 1 - (100.0 / 135.0)
+
+
+def test_rejection_reasons_are_romanian_and_agree(tmp_path):
+    """The rejection reason is the single most important sentence in the report, and it was
+    English inside a lang="ro" interface. Localising it exposed a second bug that only
+    showed up on screen: agreeing the noun but not the verb produced "o fotografie AU
+    suprapunere". Both agreements are asserted here so neither can regress silently."""
+    from app.backend.ingest import _au, _fotografii, _sunt
+
+    assert _fotografii(1) == "o fotografie"
+    assert _fotografii(2) == "2 fotografii"
+    assert _fotografii(20) == "20 de fotografii"
+    assert _fotografii(21) == "21 de fotografii"
+    assert (_sunt(1), _sunt(3)) == ("este", "sunt")
+    assert (_au(1), _au(3)) == ("are", "au")
+
+    # A single bad photo out of many: exercises the singular branch end to end.
+    good = make_photo_set(str(tmp_path / "mixed"), n=6, sharp=True, gps=True, spacing_m=12.0)
+    with open(good[0], "wb") as fh:
+        fh.write(b"not an image at all")
+    report = validate_flight_photos(good, max_bad_fraction=0.0)
+
+    joined = " ".join(report["reasons"])
+    assert joined, "expected at least one reason"
+    assert not any(w in joined.lower() for w in ("photos", "blurry", "overlap", "missing")), joined
+    # The exact shape the screen revealed: singular noun with plural verb.
+    assert "o fotografie au " not in joined
+    assert "o fotografie sunt " not in joined

@@ -1521,11 +1521,11 @@ export default function App() {
               {report.reasons && report.reasons.length > 0 && (
                 <div className="report-reasons-block">
                   <h4 className="sub-heading">Motive respingere</h4>
+                  {/* Motivele vin acum in romana de la backend, deci nu mai e nimic de
+                      marcat ca fiind in alta limba. */}
                   <ul className="reasons-list">
                     {report.reasons.map((reason, idx) => (
-                      <li key={idx} lang="en">
-                        {reason}
-                      </li>
+                      <li key={idx}>{reason}</li>
                     ))}
                   </ul>
                 </div>

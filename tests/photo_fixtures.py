@@ -13,6 +13,8 @@ def make_photo_set(
     gps: bool = True,
     spacing_m: float = 10.0,
     altitude_m: float = 100.0,
+    agl_m: float = None,
+    terrain_m: float = 0.0,
 ) -> List[str]:
     """Generate synthetic JPEG flight photo files with EXIF metadata for testing.
 
@@ -22,7 +24,11 @@ def make_photo_set(
         sharp: If True, generate sharp high-contrast images. If False, apply Gaussian blur.
         gps: If True, include EXIF GPS tags (lat, lon, altitude) and focal length.
         spacing_m: Distance in meters between consecutive photo positions along latitude.
-        altitude_m: Drone flight altitude in meters.
+        altitude_m: Height above sea level written to EXIF GPSAltitude, as a real drone does.
+        agl_m: Height above ground written to the XMP block, as DJI does. When given, this
+            is the number the overlap maths should use.
+        terrain_m: Ground elevation above sea level; only used to make the two altitudes
+            differ realistically when agl_m is not given explicitly.
 
     Returns:
         Sorted list of generated photo file paths.
@@ -87,7 +93,23 @@ def make_photo_set(
             gps_ifd[5] = 0
             gps_ifd[6] = float(altitude_m)
 
-        img.save(filepath, format="JPEG", exif=exif)
+        # Fara XMP nu se poate testa calea corecta: EXIF poarta altitudinea fata de nivelul
+        # marii, iar suprapunerea are nevoie de cea fata de sol.
+        agl = agl_m if agl_m is not None else max(0.0, altitude_m - terrain_m)
+        xmp = (
+            '<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>'
+            '<x:xmpmeta xmlns:x="adobe:ns:meta/">'
+            '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+            '<rdf:Description rdf:about="" '
+            'xmlns:drone-dji="http://www.dji.com/drone-dji/1.0/" '
+            f'drone-dji:RelativeAltitude="+{agl:.2f}" '
+            f'drone-dji:AbsoluteAltitude="+{altitude_m:.2f}"/>'
+            '</rdf:RDF></x:xmpmeta><?xpacket end="w"?>'
+        )
+        if gps:
+            img.save(filepath, format="JPEG", exif=exif, xmp=xmp.encode("utf-8"))
+        else:
+            img.save(filepath, format="JPEG", exif=exif)
         paths.append(filepath)
 
     return sorted(paths)
