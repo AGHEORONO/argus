@@ -1432,3 +1432,13 @@ dialog.anomalies-sheet {
   .timeline-axis { display: none; }
   .capture-pickers { flex-direction: column; }
 }
+
+.stale-note {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tag-warn);
+  border-left: 3px solid var(--tag-warn);
+  background: rgba(251, 191, 36, 0.08);
+}

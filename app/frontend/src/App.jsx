@@ -117,6 +117,9 @@ export default function App() {
   const [targetId, setTargetId] = useState(null);
   const [computedPairs, setComputedPairs] = useState(new Set());
   const [isComparing, setIsComparing] = useState(false);
+  const [shownPair, setShownPair] = useState(null);
+  const [hasResult, setHasResult] = useState(false);
+  const [pendingPair, setPendingPair] = useState(null);
   const DEMO_SITE = 'sit_demo';
   // Adevarul de referinta exista doar pentru perechea sintetica: stim ce s-a schimbat
   // fiindca noi am injectat schimbarile. Pe un zbor real e null, si asta se SPUNE, nu se
@@ -128,6 +131,7 @@ export default function App() {
   const sheetHeadingRef = useRef(null);
   const openSheetBtnRef = useRef(null);
   const detailRef = useRef(null);
+  const anomaliesHeadingRef = useRef(null);
   // Efectul hartii ruleaza o singura data, inainte ca selectAnomaly sa existe in closure.
   const selectAnomalyRef = useRef(null);
   const viewedFlightRef = useRef('test');
@@ -321,6 +325,7 @@ export default function App() {
     const t = timelineCaptures.find((c) => c.id === targetId);
     if (!b || !t || isComparing) return;
     setIsComparing(true);
+    setPendingPair({ base: dataLunga(b.captured_on), target: dataLunga(t.captured_on) });
     announceStatus(
       `Se calculează comparația între zborul din ${dataLunga(b.captured_on)} și zborul din ` +
         `${dataLunga(t.captured_on)}. Operațiunea poate dura până la un minut. ` +
@@ -364,9 +369,19 @@ export default function App() {
       if (detail && detail.status === 'done' && detail.result) {
         applyGeoJsonResult(detail.result, true);
         setComputedPairs((prev) => new Set(prev).add(pairKey(baselineId, targetId)));
+        setShownPair({ base: dataLunga(b.captured_on), target: dataLunga(t.captured_on) });
+        setHasResult(true);
         announceStatus(
           `Comparație finalizată. ${anomaliiDetectate(detail.result.features?.length || 0)}.`
         );
+        // Focusul se muta doar daca utilizatorul e inca aici. Dupa zeci de secunde s-ar
+        // putea sa fi trecut la formularul de ingestie, si atunci smulgerea focusului
+        // dintr-un control fara legatura e mai rea decat o sosire tacuta.
+        const active = document.activeElement;
+        const inWidget = active?.closest?.('.compare-widget');
+        if (inWidget || active === document.body) {
+          anomaliesHeadingRef.current?.focus();
+        }
       } else {
         announceError(`Comparația a eșuat: ${detail?.error_message || 'cauză necunoscută'}. Încercați din nou peste câteva momente.`);
       }
@@ -374,6 +389,7 @@ export default function App() {
       announceError('Eroare de rețea la calcularea comparației. Verificați conexiunea și încercați din nou.');
     } finally {
       setIsComparing(false);
+      setPendingPair(null);
     }
   };
 
@@ -677,7 +693,7 @@ export default function App() {
 
   // Descarcarea rezultatului: un topograf vrea GeoJSON-ul in QGIS, nu intr-un panou.
   const downloadResult = async () => {
-    if (anomalies.length === 0) return;
+    if (anomalies.length === 0 || isComparing) return;
     try {
       const res = await fetch(`${API_BASE}/flights/${encodeURIComponent(viewedFlight)}/result`);
       if (!res.ok) {
@@ -1249,11 +1265,17 @@ export default function App() {
             type="button"
             className="btn btn-secondary btn-download"
             onClick={downloadResult}
-            aria-disabled={anomalies.length === 0}
+            aria-disabled={anomalies.length === 0 || isComparing}
+            aria-describedby={isComparing ? 'download-stale-help' : undefined}
           >
             Descarcă GeoJSON
-            <span className="sr-only"> pentru zborul {viewedFlight}</span>
+            <span className="sr-only"> pentru situl {viewedFlight}</span>
           </button>
+          {isComparing && (
+            <p id="download-stale-help" className="sr-only">
+              Descărcarea este disponibilă după terminarea comparației.
+            </p>
+          )}
         </div>
 
         <div className="header-status">
@@ -1620,17 +1642,48 @@ export default function App() {
         </section>
 
         {/* Map Container */}
-        <div id="map" ref={mapContainer} />
+        <div className={isComparing ? 'map-stale' : undefined}>
+          <div id="map" ref={mapContainer} />
+          {isComparing && (
+            // aria-hidden: regiunea politicoasa poarta deja acelasi text, iar un al treilea
+            // canal l-ar anunta de trei ori.
+            <p className="map-stale-chip" aria-hidden="true">
+              Se calculează comparația…
+            </p>
+          )}
+        </div>
 
         {/* Side Panel: rezumat + declansator. Tabelul complet sta in dialogul de mai jos. */}
-        {anomalies.length > 0 && (
-          <section className="side-panel" aria-labelledby="anomalies-heading">
+        {(anomalies.length > 0 || hasResult) && (
+          <section className="side-panel" aria-labelledby="anomalies-heading" aria-busy={isComparing || undefined}>
             <div className="panel-header">
-              <h2 id="anomalies-heading">Anomalii detectate</h2>
+              <h2 id="anomalies-heading" ref={anomaliesHeadingRef} tabIndex={-1}>
+                Anomalii detectate
+              </h2>
               <span className="anomaly-count-badge" aria-hidden="true">
                 {anomalies.length}
               </span>
             </div>
+
+            {isComparing && pendingPair && (
+              // Rezultatele raman pe ecran, dar se SPUNE ca sunt ale altei perechi. Golirea
+              // ar distruge pozitia utilizatorului si ar demonta butoane posibil focusate;
+              // lasarea lor nemarcata ar afirma ca apartin perechii tocmai alese.
+              <p className="stale-note">
+                Se calculează comparația între {pendingPair.base} și {pendingPair.target}.
+                {shownPair
+                  ? ` Rezultatele de mai jos sunt cele ale comparației anterioare, între ${shownPair.base} și ${shownPair.target}.`
+                  : ' Rezultatele de mai jos nu corespund încă acestei perechi.'}
+              </p>
+            )}
+
+            {anomalies.length === 0 && hasResult && (
+              <p className="anomalies-summary">
+                {shownPair
+                  ? `Nicio anomalie detectată între ${shownPair.base} și ${shownPair.target}. Cele două zboruri nu prezintă diferențe peste pragul de detecție.`
+                  : 'Nicio anomalie detectată. Cele două zboruri nu prezintă diferențe peste pragul de detecție.'}
+              </p>
+            )}
 
             {/* Acoperirea inaintea rezumatului: ordinea de citire e ordinea importantei —
                 "a functionat?" inainte de "ce e acolo?". */}
@@ -1686,8 +1739,9 @@ export default function App() {
 
             {/* Rezumatul e singurul lucru prezent permanent in arborele de accesibilitate:
                 tabelul e intr-un <dialog> inchis. Deci trebuie sa stea singur in picioare. */}
-            <p className="anomalies-summary">{summaryText}</p>
+            {anomalies.length > 0 && <p className="anomalies-summary">{summaryText}</p>}
 
+            {anomalies.length > 0 && (
             <button
               type="button"
               ref={openSheetBtnRef}
@@ -1699,6 +1753,7 @@ export default function App() {
               <span className="sr-only">, {anomaliiText(anomalies.length)}</span>
               <span className="count-chip" aria-hidden="true">{anomalies.length}</span>
             </button>
+            )}
 
             {/* Detaliul apare doar cat timp lista e inchisa: altfel ar exista doua suprafete
                 de citire concurente si id-uri duplicate care ar rupe aria-describedby. */}
@@ -1795,7 +1850,13 @@ export default function App() {
           >
             <table className="anomalies-table">
               <caption id="anomalies-table-caption">
-                Toate anomaliile detectate, ordonate după scor descrescător
+                {/* Si aici, nu doar in titlu: cine sare direct la tabel cu tasta T nu aude
+                    niciodata titlul, deci ar citi cifre vechi crezand ca sunt cele noi. */}
+                {isComparing
+                  ? shownPair
+                    ? `Anomaliile comparației anterioare, între ${shownPair.base} și ${shownPair.target}. Se calculează o comparație nouă.`
+                    : 'Anomaliile unei comparații anterioare. Se calculează o comparație nouă.'
+                  : 'Toate anomaliile detectate, ordonate după scor descrescător'}
               </caption>
               <thead>
                 <tr>

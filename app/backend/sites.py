@@ -382,6 +382,20 @@ def build_router(get_db, flight_helpers: Dict[str, Any]) -> APIRouter:
             "result": json.loads(row["result"]) if row["result"] else None,
         }
 
+    @r.post("/sites/{site_id}/comparisons/reset")
+    def reset_comparisons(site_id: str):
+        """Drop every stored comparison for a site.
+
+        Exists for testing and for re-running a site from scratch after the detector
+        changes: without it, stored results computed by an older version keep being served
+        as if they were current.
+        """
+        sid = safe_id(site_id, "site")
+        with get_db() as conn:
+            cur = conn.execute("DELETE FROM comparisons WHERE site_id = ?", (sid,))
+            conn.commit()
+        return {"site_id": sid, "deleted": cur.rowcount}
+
     @r.get("/sites/{site_id}/comparisons")
     def list_comparisons(site_id: str):
         """Every comparison for a site, so the UI can tell which steps are already computed."""
