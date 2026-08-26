@@ -12,6 +12,10 @@ import tempfile
 # Must be set before app.backend.main is imported, since DB_PATH is read at module level.
 _TEST_DB = os.path.join(tempfile.gettempdir(), "argus_pytest.db")
 os.environ.setdefault("ARGUS_DB_PATH", _TEST_DB)
+# Testele nu au nevoie de datele demo: cele care le folosesc se sar explicit cand lipsesc,
+# iar benchmark-ul de detectie isi genereaza singur perechea. Fara asta, fiecare rulare ar
+# descarca un ortofotoplan si ar construi COG-uri de ~11MB.
+os.environ.setdefault("ARGUS_SKIP_SEED", "1")
 
 
 def pytest_sessionstart(session):

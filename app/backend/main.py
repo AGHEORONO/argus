@@ -89,6 +89,14 @@ def init_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # In CI seed-ul ar descarca ortofotoplanul de referinta si ar construi COG-uri de ~11MB
+    # la fiecare rulare, adica o dependenta de retea si minute irosite pentru date de care
+    # testele nu au nevoie: benchmark-ul de detectie isi genereaza singur perechea.
+    if os.environ.get("ARGUS_SKIP_SEED") == "1":
+        logger.info("ARGUS_SKIP_SEED=1: se sare peste datele demo.")
+        yield
+        return
+
     try:
         from app.backend.provision import seed_demo_flight, seed_demo_site
         seed_demo_flight(get_db)
