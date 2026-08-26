@@ -1428,7 +1428,8 @@ dialog.anomalies-sheet {
 
 /* Sub 480px axa nu mai e lizibila, dar nu se pierde informatie: ordinea, intervalele si
    starea de calcul sunt toate in textul optiunilor si in rezumat. */
-@media (max-width: 480px) {
+/* "sub 480px" inseamna strict mai mic: la exact 480 axa inca incape. */
+@media (max-width: 479px) {
   .timeline-axis { display: none; }
   .capture-pickers { flex-direction: column; }
 }

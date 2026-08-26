@@ -43,6 +43,15 @@ const anomaliiDetectate = (n) =>
   : n === 1 ? 'O anomalie detectată'
   : `${n} ${de(n)}anomalii detectate`;
 
+const fotografiiText = (n) => (n === 1 ? 'o fotografie' : `${n} ${de(n)}fotografii`);
+const fisiereText = (n) => (n === 1 ? 'un fișier' : `${n} ${de(n)}fișiere`);
+const motiveText = (n) => (n === 1 ? 'un motiv de respingere' : `${n} ${de(n)}motive de respingere`);
+// Substantivul si verbul trebuie sa se acorde amandoua: "o fotografie SELECTATE" e la fel
+// de gresit ca "1 fotografii".
+const selectateText = (n) => (n === 1 ? 'selectată' : 'selectate');
+const incarcateText = (n) => (n === 1 ? 'încărcată' : 'încărcate');
+const verificateText = (n) => (n === 1 ? 'verificată' : 'verificate');
+
 const schimbariText = (n) =>
   n === 0 ? 'nicio schimbare cunoscută'
   : n === 1 ? 'o schimbare cunoscută'
@@ -250,7 +259,7 @@ export default function App() {
     // Recall singur e trivial de pacalit: un detector care coloreaza tot situl scoate 4 din 4.
     // Rangul celei mai adanci schimbari gasite costa nimic si face cifra onesta.
     return `${found} din ${zones.length} schimbări cunoscute de referință au fost găsite`
-      + (found === zones.length ? `, toate în primele ${deepest} anomalii după scor.` : '.');
+      + (found === zones.length ? `, toate în ${deepest === 1 ? 'prima anomalie' : `primele ${deepest} anomalii`} după scor.` : '.');
   };
 
   const pairKey = (a, b) => (a && b ? [a, b].sort().join('|') : '');
@@ -880,7 +889,7 @@ export default function App() {
       found === 0
         ? 'Nicio schimbare cunoscută de referință nu a fost găsită.'
         : `${found} din ${rows.length} schimbări cunoscute de referință au fost găsite` +
-          (found === rows.length ? `, toate în primele ${deepest} anomalii după scor.` : '.');
+          (found === rows.length ? `, toate în ${deepest === 1 ? 'prima anomalie' : `primele ${deepest} anomalii`} după scor.` : '.');
     return {
       rows,
       count: rows.length,
@@ -1064,7 +1073,7 @@ export default function App() {
     const rejected = all.length - files.length;
 
     if (files.length === 0) {
-      const msg = `Niciun fișier acceptat. ${rejected} ${rejected === 1 ? 'fișier nu este' : 'fișiere nu sunt'} în format JPEG.`;
+      const msg = `Niciun fișier acceptat. ${fisiereText(rejected)} ${rejected === 1 ? 'nu este' : 'nu sunt'} în format JPEG.`;
       setApiError(msg);
       setLastFailedAction(null);
       announceError(msg);
@@ -1079,8 +1088,8 @@ export default function App() {
     setLastFailedAction(null);
     announceStatus(
       rejected > 0
-        ? `${files.length} fotografii selectate. ${rejected} ${rejected === 1 ? 'fișier ignorat, nu este' : 'fișiere ignorate, nu sunt'} în format JPEG.`
-        : `${files.length} fotografii selectate.`
+        ? `${fotografiiText(files.length)} ${selectateText(files.length)}. ${fisiereText(rejected)} ${rejected === 1 ? 'ignorat, nu este' : 'ignorate, nu sunt'} în format JPEG.`
+        : `${fotografiiText(files.length)} ${selectateText(files.length)}.`
     );
   };
 
@@ -1119,7 +1128,7 @@ export default function App() {
     setApiError(null);
     setErrorMessage('');
     setLastFailedAction(null);
-    announceStatus(`Se încarcă ${selectedFiles.length} fotografii.`);
+    announceStatus(`Se încarcă ${fotografiiText(selectedFiles.length)}.`);
 
     try {
       const formData = new FormData();
@@ -1151,7 +1160,7 @@ export default function App() {
       setIsUploaded(true);
       setIsUploading(false);
       announceStatus(
-        `Încărcare finalizată. ${selectedFiles.length} fotografii încărcate. Butonul Validează este acum disponibil.`
+        `Încărcare finalizată. ${fotografiiText(selectedFiles.length)} ${incarcateText(selectedFiles.length)}. Butonul Validează este acum disponibil.`
       );
     } catch (err) {
       console.error('Upload error:', err);
@@ -1172,7 +1181,7 @@ export default function App() {
     setErrorMessage('');
     setLastFailedAction(null);
     announceStatus(
-      `Se validează ${selectedFiles.length} fotografii. Operațiunea poate dura câteva secunde.`
+      `Se validează ${fotografiiText(selectedFiles.length)}. Operațiunea poate dura câteva secunde.`
     );
 
     try {
@@ -1503,16 +1512,16 @@ export default function App() {
                     const total = sum.total ?? 0;
                     const bad =
                       (sum.blurry ?? 0) + (sum.no_gps ?? 0) + (sum.low_overlap ?? 0) + (sum.unreadable ?? 0);
-                    const detaliu = `Din ${total} fotografii: ${sum.blurry ?? 0} neclare, ${sum.no_gps ?? 0} fără date GPS, ${sum.low_overlap ?? 0} cu suprapunere insuficientă, ${sum.unreadable ?? 0} ilizibile.`;
+                    const detaliu = `Din ${fotografiiText(total)}: ${sum.blurry ?? 0} neclare, ${sum.no_gps ?? 0} fără date GPS, ${sum.low_overlap ?? 0} cu suprapunere insuficientă, ${sum.unreadable ?? 0} ilizibile.`;
                     if (report.accepted) {
                       // "nicio problemă" se deduce din cifre — un set poate fi acceptat avand
                       // totusi probleme sub prag, iar afirmatia contrara ar contrazice tabelul.
                       return bad === 0
-                        ? `${total} fotografii verificate, nicio problemă.`
+                        ? `${fotografiiText(total)} ${verificateText(total)}, nicio problemă.`
                         : `${detaliu} Sub pragul de respingere, deci setul a fost acceptat.`;
                     }
                     const nr = report.reasons?.length || 0;
-                    return `${nr} ${nr === 1 ? 'motiv de respingere' : 'motive de respingere'}. ${detaliu}`;
+                    return `${motiveText(nr)}. ${detaliu}`;
                   })()}
                 </span>
               </div>

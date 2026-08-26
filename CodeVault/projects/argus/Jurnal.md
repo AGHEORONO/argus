@@ -8,6 +8,56 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-26 — audit cu ochi proaspeți, patru defecte de fond, timeline
+
+**Făcut**: 23 de commituri. Rezumatul e mai lung decât de obicei fiindcă ziua a schimbat ce credeam despre proiect.
+
+### Auditul
+
+Un agent cu memorie curată, instruit să nu creadă niciun comentariu și niciun mesaj de commit, a verificat opt afirmații. Trei erau false:
+
+1. **Producția era vizual stricată.** `display: flex` pe `dialog.anomalies-sheet` suprascria regula browserului `dialog:not([open]) { display: none }`, deci panoul era pictat permanent — 1440×675 px peste hartă, iar în centrul ecranului utilizatorul vedea o celulă de tabel. Testul meu verifica `.open === false`, adevărat, și nu s-a uitat niciodată dacă elementul e **vizibil**.
+2. **Testul algoritmului central trecea cu `after == before`.** Toate cele patru aserțiuni erau tautologice — `len(features) == 2` doar repeta `top_n=2`.
+3. **Niciun test nu verifica vreodată că un tile are pixeli.** Prin gaura asta a trecut un server de tile-uri complet gol.
+
+### Cele patru defecte care ar fi făcut primul ortofotoplan real să eșueze tăcut
+
+- **Tiling-ul nu reproiecta niciodată.** Compara limite în grade cu limite în CRS-ul nativ. Mergea doar fiindcă rasterul demo e din întâmplare EPSG:4326 — neobișnuit pentru un ortofotoplan. Orice ieșire de ODM sau Pix4D servea tile-uri goale cu `HTTP 200` și `has_tiles: true`.
+- **Detecția emitea coordonate în CRS-ul sursei.** Pe un zbor UTM, panoul accesibil spunea *„la aproximativ 544820807340 de metri de centru"*. Capcana: rezumatul părea plauzibil, fiindcă venea din altă cale care reproiecta corect.
+- **COG-urile nu se reconstruiau niciodată.** După o corecție de imagini vedeai rasterul vechi cu anomaliile noi peste, raportat `done`.
+- **Detectorul nu putea spune „nimic nu s-a schimbat".** Pe rastere identice returna cinci anomalii cu scor 0,5.
+
+### Securitate
+
+Un singur `POST /flights` fără fișiere, cu `flight_id=test`, oprea demo-ul public până la repornire. Iar `allow_origins=["*"]` cu `allow_credentials=True` **nu** trimite `*` — Starlette reflectă originea care a cerut. Combinația arată permisivă și e opusul.
+
+Testele scriau în baza de date de **producție**, lăsând un zbor fantomă vizibil în API.
+
+### Ce s-a construit
+
+Suprapunerea schimbărilor cunoscute (răspunde direct la „nu-mi dau seama ce ar trebui să fie anomaliile"), redesign către unealtă tehnică, și **timeline-ul**: un sit cu N zboruri datate, comparabile oricare două. Vezi [[Decizii]] D-018.
+
+Specificația de accesibilitate m-a corectat pe punctul central: `<input type="range">` **nu poate** plasa capete la poziții neliniare, deci spațierea proporțională excludea sliderul din geometrie, nu din ARIA. A doua variantă a specificației și-a contrazis prima, corect, fiindcă decizia de a permite introducere de la tastatură a schimbat premisa — marcajele devenind decorative, criteriul de mărime a țintei nu se mai aplică deloc.
+
+### Altitudinea
+
+Calculul suprapunerii folosea altitudinea EXIF, raportată la **nivelul mării**. Peste teren la 80 m, un zbor la 90 m AGL raportează ~170 m și footprint-ul iese 255 m în loc de 135 m. La 100 m între poze: suprapunere reală 0,26 (respins) versus 0,61 (acceptat). Eroarea era mereu în direcția **permisivă**. Se citește acum `RelativeAltitude` din XMP, cu marcaj explicit când se cade pe presupunere.
+
+**Check output**:
+```
+70 pytest · 24/24 ingestie · 23/23 riglă · 19/19 așteptare
+34/34 echivalent textual · 21/21 schimbări cunoscute · 14/14 selector
+15/15 reflow la 320/480/900px · T-08 fără regresie
+```
+
+**Blocaje**: niciunul tehnic. Faza 2 rămâne blocată de [[Intrebari deschise]] Î-05 și de hardware.
+
+**De reținut, spus cinstit**: nimic n-a atins vreodată o poză reală de dronă. EXIF-ul și XMP-ul sunt scrise de noi, deci codul e validat împotriva propriilor presupuneri. De patru ori într-o zi un server pornit înainte de o modificare a servit cod vechi și m-a făcut să cred că un fix nu funcționează — de fiecare dată am investigat înainte să repar ceva ce nu era stricat.
+
+**Urmează**: răspunsurile de la coordonator (lista trimisă). Fără ele, ce rămâne e cosmetic.
+
+---
+
 ## 2026-08-25 (2) — Faza 1: ingestie și validare de poze, cap-coadă
 
 **Făcut**: T-09, T-10, T-11. Patru agenți `agy`/Gemini în paralel pe contract de API fixat în avans, plus două treceri de `accessibility-lead` (una înainte de a scrie frontendul, una peste codul scris).
