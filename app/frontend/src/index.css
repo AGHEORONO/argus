@@ -70,16 +70,49 @@ body, html, #root {
 }
 
 .app-container {
+  /* position:relative e obligatoriu, nu decorativ: .sr-only e absolut pozitionat, iar fara
+     un stramos pozitionat se raporteaza la pagina. Textul lui nowrap intinde atunci zona
+     derulabila cu cateva sute de pixeli de spatiu gol. */
   position: relative;
+  /* Grila andocata, ca intr-o aplicatie CAD: bara sus, raftul de unelte in stanga, vizorul
+     ia tot restul. Inainte totul plutea peste harta cu position:absolute, ceea ce ii manca
+     spatiul din trei parti si facea harta greu de citit. */
+  display: grid;
+  grid-template-rows: auto 1fr;
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
-.main-content {
-  position: relative;
-  width: 100%;
-  height: 100%;
+.workspace {
+  display: grid;
+  grid-template-columns: var(--rail-width) 1fr;
+  min-height: 0;
+  overflow: hidden;
 }
+
+.tool-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  /* Raftul isi deruleaza propriul continut. overflow-x separat, ca sa nu existe scroll
+     orizontal ascuns; si NU shorthand-ul `overflow`, care ar reseta axa verticala. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--border-hairline);
+  border-right: 1px solid var(--border-hairline);
+}
+
+.viewport {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-app);
+}
+
+
 
 #map {
   width: 100%;
@@ -91,18 +124,14 @@ body, html, #root {
 
 /* Glassmorphism Header */
 .top-header {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  right: 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 20px;
+  gap: 16px;
+  padding: 8px 14px;
   background: var(--bg-panel-solid);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius);
-  z-index: 10;
+  border-bottom: 1px solid var(--border-hairline);
+  flex-wrap: wrap;
 }
 
 .brand-section {
@@ -171,22 +200,19 @@ body, html, #root {
 
 /* Ingest Panel */
 .ingest-panel {
-  position: absolute;
-  top: 84px;
-  left: 16px;
-  width: min(390px, calc(100% - 32px));
-  max-height: calc(100% - 120px);
+  position: static;
+  width: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: none;
+  border-radius: 0;
   background: var(--bg-panel-solid);
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius);
-  z-index: 10;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
-  color: var(--text-main);
-  overflow-y: auto;
-  padding: 16px;
-  gap: 14px;
+  gap: 8px;
+  overflow: visible;
 }
 
 .ingest-panel h2 {
@@ -644,20 +670,19 @@ body, html, #root {
 
 /* Floating Bottom Slider Widget */
 .slider-widget {
-  position: absolute;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(560px, calc(100% - 32px));
-  padding: 16px 24px;
+  position: static;
+  width: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: none;
+  border-radius: 0;
   background: var(--bg-panel-solid);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius);
-  z-index: 10;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+  overflow: visible;
 }
 
 .slider-labels {
@@ -721,24 +746,19 @@ body, html, #root {
 
 /* Sidebar Candidate Inspector */
 .side-panel {
-  position: absolute;
-  top: 84px;
-  right: 16px;
-  width: min(280px, calc(100% - 32px));
-  max-height: calc(100% - 190px);
-  /* overflow:hidden impingea butonul "Vezi lista completa" dincolo de marginea de taiere pe
-     ecrane scunde: devenea invizibil si inaccesibil prin scroll, deci dialogul ramanea fara
-     niciun declansator. */
-  overflow-y: auto;
+  position: static;
+  width: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: none;
+  border-radius: 0;
   background: var(--bg-panel-solid);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius);
-  z-index: 10;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  /* NU `overflow: hidden` aici: shorthand-ul reseteaza overflow-y de mai sus la hidden si
-     anuleaza exact fixul descris acolo. */
-  overflow-x: hidden;
+  gap: 8px;
+  overflow: visible;
 }
 
 .panel-header {
@@ -856,32 +876,47 @@ body, html, #root {
   }
 }
 
+/* Sub 900px raftul si vizorul nu mai incap unul langa altul: un raft de 340px plus orice
+   vizor depaseste 320px, iar rezultatul ar fi scroll pe doua axe (esec 1.4.10 Reflow).
+   Layout-ul se desface intr-o singura coloana, cu harta ca bloc de inaltime fixa. */
 @media (max-width: 900px) {
   body,
   html,
   #root,
-  .app-container,
-  .main-content {
-    overflow: auto;
+  .app-container {
+    /* overflow-y si overflow-x separat, NU shorthand-ul: `overflow: auto` deschide si axa
+       orizontala, iar pagina devine derulabila lateral -- esec 1.4.10. A treia oara cand
+       shorthand-ul de overflow face exact raul asta in fisierul acesta. */
+    overflow-y: auto;
+    /* `clip`, nu `hidden`: hidden creeaza totusi un container derulabil programatic, deci
+       pagina poate fi derulata lateral in spatiu gol. clip nu creeaza container deloc. */
+    overflow-x: clip;
     height: auto;
     min-height: 100%;
   }
 
-  .top-header,
-  .ingest-panel,
-  .side-panel,
-  .slider-widget {
-    position: static;
-    transform: none;
-    margin: 16px auto;
-    width: calc(100% - 32px);
+  .app-container,
+  .workspace {
+    display: block;
+  }
+
+  .tool-rail {
+    overflow: visible;
+    border-right: none;
     max-height: none;
   }
 
-  #map {
-    position: relative;
-    height: 350px;
-    min-height: 250px;
+  .viewport {
+    height: 60vh;
+    min-height: 320px;
+    border-left: none;
+    border-top: 1px solid var(--border-hairline);
+  }
+
+  /* La ecran complet pe latime mica raftul tot dispare, dar harta trebuie sa creasca,
+     altfel utilizatorul ascunde uneltele si nu castiga nimic. */
+  .app-container.rail-hidden .viewport {
+    height: calc(100vh - 60px);
   }
 }
 
@@ -1442,4 +1477,72 @@ dialog.anomalies-sheet {
   color: var(--tag-warn);
   border-left: 3px solid var(--tag-warn);
   background: rgba(251, 191, 36, 0.08);
+}
+
+
+:root {
+  --rail-width: 340px;
+}
+
+/* Harta umple vizorul, care e acum un dreptunghi propriu, nu tot ecranul. */
+#map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Ecran complet: raftul se retrage, vizorul ia toata latimea. visibility:hidden scoate
+   continutul si din ordinea de tabulare -- ceea ce e dorit, dar inseamna ca focusul trebuie
+   mutat INAINTE de ascundere, altfel cade pe body. Vezi toggleFullscreen. */
+.app-container.rail-hidden .workspace {
+  grid-template-columns: 0 1fr;
+}
+
+.app-container.rail-hidden .tool-rail {
+  visibility: hidden;
+  border-right: none;
+}
+
+/* Un copil de flex sau grid are min-width:auto implicit, deci REFUZA sa se micsoreze sub
+   latimea continutului sau -- exact acelasi tipar ca min-height la raft. Fara asta,
+   tabelul de 7 coloane impinge dialogul dincolo de latimea ecranului si apare scroll
+   orizontal pe pagina, in loc sa se deruleze doar tabelul. */
+.table-scroll,
+.sheet-table-scroll {
+  min-width: 0;
+  max-width: 100%;
+}
+
+dialog.anomalies-sheet {
+  max-width: 100vw;
+}
+
+/* Textul din live regions e nowrap prin reteta .sr-only. Parintele il decupeaza vizual, dar
+   pe layout-uri inguste tot poate intinde documentul. */
+
+
+@media (max-width: 900px) {
+  /* Ultima plasa de siguranta: harta are voie sa ceara doua axe (exceptia din 1.4.10 pentru
+     continut care necesita layout bidimensional), dar pagina din jurul ei nu. */
+  .app-container {
+    overflow-x: clip;
+  }
+
+  .table-scroll,
+  .sheet-table-scroll {
+    width: 100%;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  /* Dialogul e in flux la latimi mici, iar tabelul de 7 coloane e mai lat decat el. Fara
+     taiere pe axa orizontala, latimea aia se propaga in sus si face PAGINA derulabila
+     lateral. Tabelul isi pastreaza scroll-ul propriu in .sheet-table-scroll, deci nu se
+     pierde nimic. */
+  dialog.anomalies-sheet {
+    overflow-x: hidden;
+    box-sizing: border-box;
+  }
 }
