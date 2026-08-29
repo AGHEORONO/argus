@@ -38,7 +38,6 @@ export default function Timeline({
   onCompare,
   isComparing,
   pairComputed,
-  opacityControl,
 }) {
   if (!captures || captures.length < 2) {
     return (
@@ -133,9 +132,11 @@ export default function Timeline({
         {renderSelect('target')}
       </div>
 
+      {/* Doar instructiunea. Fraza a doua era consecinta ei restatuita, iar a treia descria
+          axa — care e aria-hidden, deci invizibila pentru cititoarele de ecran si evidenta
+          pentru ceilalti. */}
       <p id="order-rule" className="help-text">
-        Zborul de referință este întotdeauna cel anterior. Zborurile care ar inversa ordinea
-        nu pot fi selectate. Poziția pe axă este proporțională cu timpul scurs.
+        Zborul de referință este întotdeauna cel anterior.
       </p>
 
       {/* Summary before the button: "you chose X and Y, 49 days apart, not computed" is the
@@ -147,7 +148,9 @@ export default function Timeline({
             Referință: <time dateTime={base.captured_on}>{dataLunga(base.captured_on)}</time>.
             {' '}Comparat: <time dateTime={target.captured_on}>{dataLunga(target.captured_on)}</time>.
             {' '}Interval de {intervalText(gap)}.{' '}
-            {pairComputed ? 'Comparația este calculată.' : 'Comparația nu a fost încă calculată.'}
+            <span id="compare-help">
+              {pairComputed ? 'Comparația este calculată.' : 'Comparația nu a fost încă calculată.'}
+            </span>
           </>
         )}
       </p>
@@ -166,14 +169,7 @@ export default function Timeline({
         >
           Compară zborurile
         </button>
-        {opacityControl}
       </div>
-
-      {pairComputed && (
-        <p id="compare-help" className="help-text">
-          Comparația pentru această pereche este deja calculată.
-        </p>
-      )}
 
       {isComparing && (
         <div className="progress-group">

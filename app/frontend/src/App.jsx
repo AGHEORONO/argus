@@ -129,6 +129,9 @@ export default function App() {
   const [shownPair, setShownPair] = useState(null);
   const [hasResult, setHasResult] = useState(false);
   const [railHidden, setRailHidden] = useState(false);
+  const [activeTab, setActiveTab] = useState('comparatie');
+  const tabRefs = useRef({});
+  const railPanelRef = useRef(null);
   const [pendingPair, setPendingPair] = useState(null);
   const DEMO_SITE = 'sit_demo';
   // Adevarul de referinta exista doar pentru perechea sintetica: stim ce s-a schimbat
@@ -382,17 +385,24 @@ export default function App() {
         setComputedPairs((prev) => new Set(prev).add(pairKey(baselineId, targetId)));
         setShownPair({ base: dataLunga(b.captured_on), target: dataLunga(t.captured_on) });
         setHasResult(true);
-        announceStatus(
-          `Comparație finalizată. ${anomaliiDetectate(detail.result.features?.length || 0)}.`
-        );
+        // UN singur anunt. Doua apeluri consecutive inseamna ca al doilea inlocuieste nodul
+        // primului si utilizatorul pierde tocmai rezultatul. Mesajul e scurt cand focusul se
+        // muta (mutarea intrerupe vorbirea politicoasa) si mai lung cand nu se muta, fiindca
+        // atunci e singurul canal.
+        const target = anomaliesHeadingRef.current;
+        const active = document.activeElement;
+        const here = railPanelRef.current?.contains(active);
+        const gata = `Comparație finalizată. ${anomaliiDetectate(detail.result.features?.length || 0)}.`;
+        if (target && (here || active === document.body)) {
+          announceStatus(gata);
+          target.focus();
+        } else {
+          announceStatus(`${gata} Rezultatele sunt în fila Anomalii.`);
+        }
         // Focusul se muta doar daca utilizatorul e inca aici. Dupa zeci de secunde s-ar
         // putea sa fi trecut la formularul de ingestie, si atunci smulgerea focusului
         // dintr-un control fara legatura e mai rea decat o sosire tacuta.
-        const active = document.activeElement;
-        const inWidget = active?.closest?.('.compare-widget');
-        if (inWidget || active === document.body) {
-          anomaliesHeadingRef.current?.focus();
-        }
+
       } else {
         announceError(`Comparația a eșuat: ${detail?.error_message || 'cauză necunoscută'}. Încercați din nou peste câteva momente.`);
       }
@@ -779,7 +789,7 @@ export default function App() {
     // ordinea de tabulare, deci daca focusul era intr-un control din raft ar cadea pe
     // <body> si utilizatorul si-ar pierde locul in pagina.
     if (next && fullscreenBtnRef.current?.contains?.(document.activeElement) === false) {
-      const inRail = document.getElementById('tool-rail')?.contains(document.activeElement);
+      const inRail = document.getElementById('rail-panel')?.contains(document.activeElement);
       if (inRail) fullscreenBtnRef.current?.focus();
     }
     setRailHidden(next);
@@ -826,6 +836,30 @@ export default function App() {
     return () => ro.disconnect();
   }, []);
 
+  const TABS = [
+    { id: 'ingestie', label: 'Ingestie' },
+    { id: 'comparatie', label: 'Comparație' },
+    { id: 'anomalii', label: 'Anomalii' },
+  ];
+
+  // Roving tabindex: cele trei file sunt UN singur tab stop, iar sagetile se plimba intre
+  // ele. Exact decongestionarea ceruta — inainte, raftul avea vreo cincisprezece opriri.
+  const onTabKeyDown = (e) => {
+    const i = TABS.findIndex((t) => t.id === activeTab);
+    let next = null;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (i + 1) % TABS.length;
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = TABS.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    const id = TABS[next].id;
+    setActiveTab(id);
+    // Activare automata: panoul se schimba la sageata, fara Enter. Focusul RAMANE pe fila,
+    // altfel plimbarea cu sagetile ar deveni imposibila.
+    tabRefs.current[id]?.focus();
+  };
+
   const openSheet = () => {
     const d = sheetRef.current;
     if (!d || d.open) return;
@@ -848,7 +882,9 @@ export default function App() {
     if (!d) return;
     const onClose = () => {
       setIsSheetOpen(false);
-      openSheetBtnRef.current?.focus();
+      // Butonul poate fi demontat daca lista s-a golit intre timp; fila Anomalii e mereu
+      // montata, deci e o aterizare garantata. Fara ea, focusul cade pe <body>.
+      (openSheetBtnRef.current ?? tabRefs.current.anomalii)?.focus();
     };
     d.addEventListener('close', onClose);
     return () => d.removeEventListener('close', onClose);
@@ -1347,7 +1383,10 @@ export default function App() {
             aria-pressed={railHidden}
             onClick={toggleFullscreen}
           >
-            {railHidden ? 'Arată uneltele' : 'Ecran complet'}
+            {/* Nume STABIL plus aria-pressed. Varianta cu eticheta care se schimba SI
+                aria-pressed anunta "Arata uneltele, buton, apasat" — eticheta spune una,
+                starea spune opusul. */}
+            Ecran complet
           </button>
 
           <button
@@ -1383,418 +1422,411 @@ export default function App() {
           restul si ramane un dreptunghi curat. Inainte, patru panouri pluteau peste harta
           si ii mancau spatiul din trei parti. */}
       <div className="workspace">
-        <div className="tool-rail" id="tool-rail">
-          {/* Floating Bottom Slider */}
-          <section className="slider-widget compare-widget" aria-labelledby="cmp-heading">
-            <h2 id="cmp-heading">Comparație zboruri</h2>
+        {/* Bara de activitati: trei destinatii, un singur panou vizibil. Tiparul din VS Code
+            si Fusion — utilizatorul alege un context, vede uneltele acelui context, restul
+            dispare. Inainte stivuiam toate trei deodata, ceea ce e o lista de capabilitati,
+            nu un spatiu de lucru. */}
+        <div className="activity-bar" role="tablist" aria-orientation="vertical"
+             aria-label="Secțiuni de lucru" onKeyDown={onTabKeyDown}>
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              id={`tab-${t.id}`}
+              className={`activity-item ${activeTab === t.id ? 'is-active' : ''}`}
+              aria-selected={activeTab === t.id}
+              // Un singur panou persistent, cu id stabil: cu montare conditionata,
+              // aria-controls de pe filele inactive ar arata spre id-uri inexistente.
+              aria-controls="rail-panel"
+              tabIndex={activeTab === t.id ? 0 : -1}
+              ref={(el) => { tabRefs.current[t.id] = el; }}
+              onClick={() => setActiveTab(t.id)}
+            >
+              <span className="activity-icon" aria-hidden="true" />
+              <span className="activity-label">{t.label}</span>
+            </button>
+          ))}
+        </div>
 
-            {timelineCaptures.length >= 2 ? (
-              <Timeline
-                captures={timelineCaptures}
-                baselineId={baselineId}
-                targetId={targetId}
-                onSelect={handleCaptureSelect}
-                isComputed={isPairComputed}
-                pairComputed={isPairComputed(baselineId, targetId)}
-                isComparing={isComparing}
-                onCompare={runComparison}
-                opacityControl={
-                  <div className="slider-control-row">
-                    <label htmlFor="opacity-slider">Amestec între zboruri</label>
-                    <input
-                      id="opacity-slider"
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      value={opacity}
-                      onChange={handleSliderChange}
-                      className="opacity-slider"
-                      aria-valuetext={mixText(opacity)}
-                    />
-                    <span className="slider-value" aria-hidden="true">
-                      {Math.round(opacity * 100)}%
+        <div className="tool-rail" id="rail-panel" role="tabpanel"
+             ref={railPanelRef} aria-labelledby={`tab-${activeTab}`}>
+          {activeTab === 'comparatie' && (
+            <section className="slider-widget compare-widget" aria-labelledby="cmp-heading">
+              <h2 id="cmp-heading">Comparație zboruri</h2>
+
+              {timelineCaptures.length >= 2 ? (
+                <Timeline
+                  captures={timelineCaptures}
+                  baselineId={baselineId}
+                  targetId={targetId}
+                  onSelect={handleCaptureSelect}
+                  isComputed={isPairComputed}
+                  pairComputed={isPairComputed(baselineId, targetId)}
+                  isComparing={isComparing}
+                  onCompare={runComparison}
+                />
+              ) : (
+                <p className="help-text">
+                  Situl afișat nu are încă zboruri de comparat.
+                </p>
+              )}
+            </section>
+          )}
+
+          {activeTab === 'ingestie' && (
+            <section className="ingest-panel" aria-labelledby="ingest-heading">
+              <h2 id="ingest-heading">Ingestie fotografii zbor</h2>
+
+              {/* Flight ID Input */}
+              <div className="form-group">
+                <label htmlFor="flight-id-input" className="form-label">
+                  ID Zbor
+                </label>
+                <input
+                  id="flight-id-input"
+                  type="text"
+                  className="text-input"
+                  value={flightId}
+                  onChange={(e) => setFlightId(e.target.value)}
+                  readOnly={isUploading || isValidating}
+                />
+              </div>
+
+              {/* File Selection & Drop Zone */}
+              <div className="form-group">
+                <label htmlFor="flight-photos-input" className="form-label">
+                  Fotografii zbor (JPEG)
+                </label>
+                <input
+                  id="flight-photos-input"
+                  type="file"
+                  multiple
+                  accept="image/jpeg,.jpg,.jpeg"
+                  className="file-input sr-only"
+                  aria-describedby="drop-zone-instructions"
+                  onChange={handleFileInputChange}
+                />
+                <div
+                  className={`drop-zone ${isDragging ? 'drag-over' : ''}`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  <p id="drop-zone-instructions" className="drop-zone-text">
+                    Trageți fotografiile aici sau selectați-le.
+                  </p>
+                  <label htmlFor="flight-photos-input" className="file-select-button">
+                    Selectează fișiere
+                  </label>
+                </div>
+              </div>
+
+              {/* Selected Files List */}
+              {selectedFiles.length > 0 && (
+                <div className="selected-files-block">
+                  <h3 className="sub-heading">Fișiere selectate ({selectedFiles.length})</h3>
+                  <ul className="selected-files-list" role="list">
+                    {selectedFiles.map((file, idx) => (
+                      <li key={`${file.name}-${idx}`} className="selected-file-item">
+                        <span className="file-name">{file.name}</span>
+                        <span className="file-size">({Math.round(file.size / 1024)} KB)</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Actions & Native Progress */}
+              <div className="button-group">
+                {selectedFiles.length === 0 && (
+                  <p id="upload-help-text" className="help-text">
+                    Selectați fotografiile înainte de încărcare.
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  ref={uploadBtnRef}
+                  aria-disabled={selectedFiles.length === 0 || isUploading || isValidating}
+                  aria-busy={isUploading}
+                  aria-describedby={selectedFiles.length === 0 ? 'upload-help-text' : undefined}
+                  onClick={handleUpload}
+                >
+                  Încarcă fotografiile
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  ref={validateBtnRef}
+                  aria-disabled={!isUploaded || isUploading || isValidating}
+                  aria-busy={isValidating}
+                  aria-describedby={!isUploaded ? 'validate-help-text' : undefined}
+                  onClick={handleValidate}
+                >
+                  Validează
+                </button>
+
+                {!isUploaded && (
+                  <p id="validate-help-text" className="help-text">
+                    Încărcați fotografiile înainte de validare.
+                  </p>
+                )}
+              </div>
+
+              {/* Native Progress Bar outside live regions */}
+              {(isUploading || isValidating) && (
+                <div className="progress-group">
+                  <label htmlFor="ingest-progress-bar" className="progress-label">
+                    {isUploading ? 'Se încarcă fotografiile...' : 'Se validează fotografiile...'}
+                  </label>
+                  <progress id="ingest-progress-bar" className="native-progress" />
+                </div>
+              )}
+
+              {/* Error Banner with Retry */}
+              {apiError && (
+                <div className="error-banner">
+                  <p className="error-text" id="api-error-text">{apiError}</p>
+                  {lastFailedAction && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-retry"
+                      onClick={handleRetry}
+                      aria-describedby="api-error-text"
+                    >
+                      {lastFailedAction === 'validate' ? 'Reîncearcă validarea' : 'Reîncearcă încărcarea'}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Validation Report */}
+              {report && (
+                <div className="report-container">
+                  <div
+                    className={`report-verdict-header ${
+                      report.accepted ? 'verdict-pass-box' : 'verdict-fail-box'
+                    }`}
+                  >
+                    {report.accepted ? (
+                      <svg
+                        aria-hidden="true"
+                        focusable="false"
+                        className="verdict-icon verdict-pass-icon"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        height="24"
+                      >
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        />
+                        <path
+                          d="M7 12.5l3.5 3.5 6.5-6.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    ) : (
+                      <svg
+                        aria-hidden="true"
+                        focusable="false"
+                        className="verdict-icon verdict-fail-icon"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        height="24"
+                      >
+                        <path
+                          d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86L7.86 2z"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        />
+                        <line
+                          x1="7"
+                          y1="12"
+                          x2="17"
+                          y2="12"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    )}
+                    <h3
+                      id="report-heading"
+                      ref={reportHeadingRef}
+                      tabIndex={-1}
+                      className="report-heading"
+                      aria-describedby="report-verdict-detail"
+                    >
+                      Raport validare — Verdict: {report.accepted ? 'ACCEPTAT' : 'RESPINS'}
+                    </h3>
+                    <span id="report-verdict-detail" className="sr-only">
+                      {(() => {
+                        const sum = report.summary || {};
+                        const total = sum.total ?? 0;
+                        const bad =
+                          (sum.blurry ?? 0) + (sum.no_gps ?? 0) + (sum.low_overlap ?? 0) + (sum.unreadable ?? 0);
+                        const detaliu = `Din ${fotografiiText(total)}: ${sum.blurry ?? 0} neclare, ${sum.no_gps ?? 0} fără date GPS, ${sum.low_overlap ?? 0} cu suprapunere insuficientă, ${sum.unreadable ?? 0} ilizibile.`;
+                        if (report.accepted) {
+                          // "nicio problemă" se deduce din cifre — un set poate fi acceptat avand
+                          // totusi probleme sub prag, iar afirmatia contrara ar contrazice tabelul.
+                          return bad === 0
+                            ? `${fotografiiText(total)} ${verificateText(total)}, nicio problemă.`
+                            : `${detaliu} Sub pragul de respingere, deci setul a fost acceptat.`;
+                        }
+                        const nr = report.reasons?.length || 0;
+                        return `${motiveText(nr)}. ${detaliu}`;
+                      })()}
                     </span>
                   </div>
-                }
-              />
-            ) : (
-              <>
-                <div className="slider-labels">
-                  <span className="label-before">Zbor inițial (T0)</span>
-                  <span className="slider-value">Zbor curent: {Math.round(opacity * 100)}%</span>
-                  <span className="label-after">Zbor curent (T1)</span>
-                </div>
-                <div className="slider-control-row">
-                  <label htmlFor="opacity-slider" className="sr-only">
-                    Amestec între zboruri
-                  </label>
-                  <input
-                    id="opacity-slider"
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={opacity}
-                    onChange={handleSliderChange}
-                    className="opacity-slider"
-                    aria-valuetext={mixText(opacity)}
-                  />
-                </div>
-              </>
-            )}
-          </section>
-          <section className="ingest-panel" aria-labelledby="ingest-heading">
-            <h2 id="ingest-heading">Ingestie fotografii zbor</h2>
 
-            {/* Flight ID Input */}
-            <div className="form-group">
-              <label htmlFor="flight-id-input" className="form-label">
-                ID Zbor
-              </label>
-              <input
-                id="flight-id-input"
-                type="text"
-                className="text-input"
-                value={flightId}
-                onChange={(e) => setFlightId(e.target.value)}
-                readOnly={isUploading || isValidating}
-              />
-            </div>
-
-            {/* File Selection & Drop Zone */}
-            <div className="form-group">
-              <label htmlFor="flight-photos-input" className="form-label">
-                Fotografii zbor (JPEG)
-              </label>
-              <input
-                id="flight-photos-input"
-                type="file"
-                multiple
-                accept="image/jpeg,.jpg,.jpeg"
-                className="file-input sr-only"
-                aria-describedby="drop-zone-instructions"
-                onChange={handleFileInputChange}
-              />
-              <div
-                className={`drop-zone ${isDragging ? 'drag-over' : ''}`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <p id="drop-zone-instructions" className="drop-zone-text">
-                  Trageți fotografiile aici sau folosiți butonul de selectare.
-                </p>
-                <label htmlFor="flight-photos-input" className="file-select-button">
-                  Selectează fișiere
-                </label>
-              </div>
-            </div>
-
-            {/* Selected Files List */}
-            {selectedFiles.length > 0 && (
-              <div className="selected-files-block">
-                <h3 className="sub-heading">Fișiere selectate ({selectedFiles.length})</h3>
-                <ul className="selected-files-list" role="list">
-                  {selectedFiles.map((file, idx) => (
-                    <li key={`${file.name}-${idx}`} className="selected-file-item">
-                      <span className="file-name">{file.name}</span>
-                      <span className="file-size">({Math.round(file.size / 1024)} KB)</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Actions & Native Progress */}
-            <div className="button-group">
-              {selectedFiles.length === 0 && (
-                <p id="upload-help-text" className="help-text">
-                  Selectați fotografiile înainte de încărcare.
-                </p>
-              )}
-
-              <button
-                type="button"
-                className="btn btn-primary"
-                ref={uploadBtnRef}
-                aria-disabled={selectedFiles.length === 0 || isUploading || isValidating}
-                aria-busy={isUploading}
-                aria-describedby={selectedFiles.length === 0 ? 'upload-help-text' : undefined}
-                onClick={handleUpload}
-              >
-                Încarcă fotografiile
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-primary"
-                ref={validateBtnRef}
-                aria-disabled={!isUploaded || isUploading || isValidating}
-                aria-busy={isValidating}
-                aria-describedby={!isUploaded ? 'validate-help-text' : undefined}
-                onClick={handleValidate}
-              >
-                Validează
-              </button>
-
-              {!isUploaded && (
-                <p id="validate-help-text" className="help-text">
-                  Încărcați fotografiile înainte de validare.
-                </p>
-              )}
-            </div>
-
-            {/* Native Progress Bar outside live regions */}
-            {(isUploading || isValidating) && (
-              <div className="progress-group">
-                <label htmlFor="ingest-progress-bar" className="progress-label">
-                  {isUploading ? 'Se încarcă fotografiile...' : 'Se validează fotografiile...'}
-                </label>
-                <progress id="ingest-progress-bar" className="native-progress" />
-              </div>
-            )}
-
-            {/* Error Banner with Retry */}
-            {apiError && (
-              <div className="error-banner">
-                <p className="error-text" id="api-error-text">{apiError}</p>
-                {lastFailedAction && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-retry"
-                    onClick={handleRetry}
-                    aria-describedby="api-error-text"
-                  >
-                    {lastFailedAction === 'validate' ? 'Reîncearcă validarea' : 'Reîncearcă încărcarea'}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Validation Report */}
-            {report && (
-              <div className="report-container">
-                <div
-                  className={`report-verdict-header ${
-                    report.accepted ? 'verdict-pass-box' : 'verdict-fail-box'
-                  }`}
-                >
-                  {report.accepted ? (
-                    <svg
-                      aria-hidden="true"
-                      focusable="false"
-                      className="verdict-icon verdict-pass-icon"
-                      viewBox="0 0 24 24"
-                      width="24"
-                      height="24"
-                    >
-                      <circle
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      />
-                      <path
-                        d="M7 12.5l3.5 3.5 6.5-6.5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  ) : (
-                    <svg
-                      aria-hidden="true"
-                      focusable="false"
-                      className="verdict-icon verdict-fail-icon"
-                      viewBox="0 0 24 24"
-                      width="24"
-                      height="24"
-                    >
-                      <path
-                        d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86L7.86 2z"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      />
-                      <line
-                        x1="7"
-                        y1="12"
-                        x2="17"
-                        y2="12"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  )}
-                  <h3
-                    id="report-heading"
-                    ref={reportHeadingRef}
-                    tabIndex={-1}
-                    className="report-heading"
-                    aria-describedby="report-verdict-detail"
-                  >
-                    Raport validare — Verdict: {report.accepted ? 'ACCEPTAT' : 'RESPINS'}
-                  </h3>
-                  <span id="report-verdict-detail" className="sr-only">
-                    {(() => {
-                      const sum = report.summary || {};
-                      const total = sum.total ?? 0;
-                      const bad =
-                        (sum.blurry ?? 0) + (sum.no_gps ?? 0) + (sum.low_overlap ?? 0) + (sum.unreadable ?? 0);
-                      const detaliu = `Din ${fotografiiText(total)}: ${sum.blurry ?? 0} neclare, ${sum.no_gps ?? 0} fără date GPS, ${sum.low_overlap ?? 0} cu suprapunere insuficientă, ${sum.unreadable ?? 0} ilizibile.`;
-                      if (report.accepted) {
-                        // "nicio problemă" se deduce din cifre — un set poate fi acceptat avand
-                        // totusi probleme sub prag, iar afirmatia contrara ar contrazice tabelul.
-                        return bad === 0
-                          ? `${fotografiiText(total)} ${verificateText(total)}, nicio problemă.`
-                          : `${detaliu} Sub pragul de respingere, deci setul a fost acceptat.`;
-                      }
-                      const nr = report.reasons?.length || 0;
-                      return `${motiveText(nr)}. ${detaliu}`;
-                    })()}
-                  </span>
-                </div>
-
-                {/* Reasons list */}
-                {report.reasons && report.reasons.length > 0 && (
-                  <div className="report-reasons-block">
-                    <h4 className="sub-heading">Motive respingere</h4>
-                    {/* Motivele vin acum in romana de la backend, deci nu mai e nimic de
-                        marcat ca fiind in alta limba. */}
-                    <ul className="reasons-list">
-                      {report.reasons.map((reason, idx) => (
-                        <li key={idx}>{reason}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Numerical Summary */}
-                <div className="report-summary-block">
-                  <h4 className="sub-heading">Sumar verificare</h4>
-                  <dl className="report-summary-dl">
-                    <div className="summary-item">
-                      <dt>Total fotografii</dt>
-                      <dd>{report.summary?.total ?? 0}</dd>
-                    </div>
-                    <div className="summary-item">
-                      <dt>Neclare</dt>
-                      <dd>{report.summary?.blurry ?? 0}</dd>
-                    </div>
-                    <div className="summary-item">
-                      <dt>Fără date GPS</dt>
-                      <dd>{report.summary?.no_gps ?? 0}</dd>
-                    </div>
-                    <div className="summary-item">
-                      <dt>Suprapunere insuficientă</dt>
-                      <dd>{report.summary?.low_overlap ?? 0}</dd>
-                    </div>
-                    <div className="summary-item">
-                      <dt>Ilizibile</dt>
-                      <dd>{report.summary?.unreadable ?? 0}</dd>
-                    </div>
-                  </dl>
-                </div>
-
-                {/* Per-photo Table */}
-                {report.photos && report.photos.length > 0 && (
-                  <div
-                    className="table-scroll"
-                    tabIndex={0}
-                    role="region"
-                    aria-labelledby="photos-table-caption"
-                  >
-                    <table className="photos-table">
-                      <caption id="photos-table-caption">Rezultate validare pentru fiecare fotografie</caption>
-                      <thead>
-                        <tr>
-                          <th scope="col">Nume fișier</th>
-                          <th scope="col">
-                            Claritate (min. {report.config?.min_blur_score ?? 100})
-                          </th>
-                          <th scope="col">GPS</th>
-                          <th scope="col">
-                            Suprapunere (min. {Math.round((report.config?.min_overlap ?? 0.6) * 100)}%)
-                          </th>
-                          <th scope="col">Probleme</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {report.photos.map((photo, idx) => (
-                          <tr key={photo.filename || idx}>
-                            <th scope="row" className="photo-filename-cell">
-                              {photo.filename}
-                            </th>
-                            <td>
-                              {photo.blur_score !== null && photo.blur_score !== undefined ? (
-                                fmt2(photo.blur_score)
-                              ) : (
-                                <>
-                                  <span aria-hidden="true">—</span>
-                                  <span className="sr-only">Nu se poate calcula, fisier ilizibil</span>
-                                </>
-                              )}
-                            </td>
-                            <td>{photo.has_gps ? 'Da' : 'Nu'}</td>
-                            <td>
-                              {photo.overlap_with_previous !== null &&
-                              photo.overlap_with_previous !== undefined ? (
-                                `${(Number(photo.overlap_with_previous) * 100).toFixed(1)}%`
-                              ) : idx === 0 ? (
-                                <>
-                                  <span aria-hidden="true">—</span>
-                                  <span className="sr-only">
-                                    Nu se aplică, este prima fotografie
-                                  </span>
-                                </>
-                              ) : (
-                                <>
-                                  <span aria-hidden="true">—</span>
-                                  <span className="sr-only">
-                                    Nu se aplică, lipsesc datele GPS
-                                  </span>
-                                </>
-                              )}
-                            </td>
-                            <td>
-                              {!photo.issues || photo.issues.length === 0 ? (
-                                <span className="issue-tag-ok">Fără probleme</span>
-                              ) : (
-                                <ul className="photo-issues-list" role="list">
-                                  {photo.issues.map((issue, i) => (
-                                    <li key={i} className={`issue-tag issue-${issue}`}>
-                                      {ISSUE_LABELS[issue] || issue}
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </td>
-                          </tr>
+                  {/* Reasons list */}
+                  {report.reasons && report.reasons.length > 0 && (
+                    <div className="report-reasons-block">
+                      <h4 className="sub-heading">Motive respingere</h4>
+                      {/* Motivele vin acum in romana de la backend, deci nu mai e nimic de
+                          marcat ca fiind in alta limba. */}
+                      <ul className="reasons-list">
+                        {report.reasons.map((reason, idx) => (
+                          <li key={idx}>{reason}</li>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
+                      </ul>
+                    </div>
+                  )}
 
-          {/* Side Panel: rezumat + declansator. Tabelul complet sta in dialogul de mai jos. */}
-          {(anomalies.length > 0 || hasResult) && (
-            <section className="side-panel" aria-labelledby="anomalies-heading" aria-busy={isComparing || undefined}>
-              <div className="panel-header">
-                <h2 id="anomalies-heading" ref={anomaliesHeadingRef} tabIndex={-1}>
-                  Anomalii detectate
-                </h2>
-                <span className="anomaly-count-badge" aria-hidden="true">
-                  {anomalies.length}
-                </span>
+                  {/* Numerical Summary */}
+                  <div className="report-summary-block">
+                    <h4 className="sub-heading">Sumar verificare</h4>
+                    <dl className="report-summary-dl">
+                      <div className="summary-item">
+                        <dt>Total fotografii</dt>
+                        <dd>{report.summary?.total ?? 0}</dd>
+                      </div>
+                      <div className="summary-item">
+                        <dt>Neclare</dt>
+                        <dd>{report.summary?.blurry ?? 0}</dd>
+                      </div>
+                      <div className="summary-item">
+                        <dt>Fără date GPS</dt>
+                        <dd>{report.summary?.no_gps ?? 0}</dd>
+                      </div>
+                      <div className="summary-item">
+                        <dt>Suprapunere insuficientă</dt>
+                        <dd>{report.summary?.low_overlap ?? 0}</dd>
+                      </div>
+                      <div className="summary-item">
+                        <dt>Ilizibile</dt>
+                        <dd>{report.summary?.unreadable ?? 0}</dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  {/* Per-photo Table */}
+                  {report.photos && report.photos.length > 0 && (
+                    <div
+                      className="table-scroll"
+                      tabIndex={0}
+                      role="region"
+                      aria-labelledby="photos-table-caption"
+                    >
+                      <table className="photos-table">
+                        <caption id="photos-table-caption">Rezultate validare pentru fiecare fotografie</caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">Nume fișier</th>
+                            <th scope="col">
+                              Claritate (min. {report.config?.min_blur_score ?? 100})
+                            </th>
+                            <th scope="col">GPS</th>
+                            <th scope="col">
+                              Suprapunere (min. {Math.round((report.config?.min_overlap ?? 0.6) * 100)}%)
+                            </th>
+                            <th scope="col">Probleme</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {report.photos.map((photo, idx) => (
+                            <tr key={photo.filename || idx}>
+                              <th scope="row" className="photo-filename-cell">
+                                {photo.filename}
+                              </th>
+                              <td>
+                                {photo.blur_score !== null && photo.blur_score !== undefined ? (
+                                  fmt2(photo.blur_score)
+                                ) : (
+                                  <>
+                                    <span aria-hidden="true">—</span>
+                                    <span className="sr-only">Nu se poate calcula, fisier ilizibil</span>
+                                  </>
+                                )}
+                              </td>
+                              <td>{photo.has_gps ? 'Da' : 'Nu'}</td>
+                              <td>
+                                {photo.overlap_with_previous !== null &&
+                                photo.overlap_with_previous !== undefined ? (
+                                  `${(Number(photo.overlap_with_previous) * 100).toFixed(1)}%`
+                                ) : idx === 0 ? (
+                                  <>
+                                    <span aria-hidden="true">—</span>
+                                    <span className="sr-only">
+                                      Nu se aplică, este prima fotografie
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span aria-hidden="true">—</span>
+                                    <span className="sr-only">
+                                      Nu se aplică, lipsesc datele GPS
+                                    </span>
+                                  </>
+                                )}
+                              </td>
+                              <td>
+                                {!photo.issues || photo.issues.length === 0 ? (
+                                  <span className="issue-tag-ok">Fără probleme</span>
+                                ) : (
+                                  <ul className="photo-issues-list" role="list">
+                                    {photo.issues.map((issue, i) => (
+                                      <li key={i} className={`issue-tag issue-${issue}`}>
+                                        {ISSUE_LABELS[issue] || issue}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {activeTab === 'anomalii' && (
+            (anomalies.length > 0 || hasResult) ? (
+              <section className="side-panel" aria-labelledby="anomalies-heading" aria-busy={isComparing || undefined}>
+                <div className="panel-header">
+                  <h2 id="anomalies-heading" ref={anomaliesHeadingRef} tabIndex={-1}>
+                    Anomalii detectate
+                  </h2>
+                  <span className="anomaly-count-badge" aria-hidden="true">
+                    {anomalies.length}
+                  </span>
               </div>
 
               {isComparing && pendingPair && (
@@ -1822,28 +1854,20 @@ export default function App() {
               {truthInfo ? (
                 <>
                   <p className="recall-line">{truthInfo.recall}</p>
-                  <div className="known-toggle">
-                    <input
-                      type="checkbox"
-                      id="show-known-changes"
-                      className="known-toggle-input"
-                      checked={showKnown}
-                      onChange={(e) => toggleKnownChanges(e.target.checked)}
-                      aria-describedby="known-toggle-help"
-                    />
-                    <label htmlFor="show-known-changes">
-                      Afișează schimbările cunoscute pe hartă
-                    </label>
-                  </div>
-                  <p id="known-toggle-help" className="help-text">
-                    Cele {truthInfo.count} schimbări confirmate, cu contur galben întrerupt.
-                    Anomaliile candidate au contur roșu continuu.
-                  </p>
-                  {/* Enumerarea in proza: zonele exista ca text si cu dialogul inchis, si cu
-                      stratul stins. */}
-                  <p className="known-list-prose">
-                    Schimbări cunoscute de referință: {truthInfo.labels}.
-                  </p>
+                  {/* Comutatoarele de straturi si amestecul au plecat pe harta: sunt comenzi
+                      de VIZUALIZARE, nu de flux de lucru. Dovada ca stateau gresit era propriul
+                      meu text de ajutor, care spunea "compara cu sliderul" dintr-un panou in
+                      care sliderul nu se vedea. */}
+                  {/* Lista ramane, dar pliata: e DATE, nu proza — singurul loc unde exista
+                      etichetele cand dialogul e inchis si stratul stins. */}
+                  <details className="known-list">
+                    <summary>Schimbări cunoscute ({truthInfo.count})</summary>
+                    <ul>
+                      {truthInfo.rows.map((z) => (
+                        <li key={z.zone}>{z.label}</li>
+                      ))}
+                    </ul>
+                  </details>
                 </>
               ) : (
                 <p className="help-text">
@@ -1851,23 +1875,6 @@ export default function App() {
                   fi calculată.
                 </p>
               )}
-
-              {/* Ascunderea candidatilor lasa ortofotoplanul curat, ca sa se vada exact ce s-a
-                  schimbat sub ei — cu sliderul, diferenta devine vizibila direct. */}
-              <div className="known-toggle">
-                <input
-                  type="checkbox"
-                  id="show-candidates"
-                  className="known-toggle-input candidates-toggle-input"
-                  checked={showCandidates}
-                  onChange={(e) => toggleCandidates(e.target.checked)}
-                  aria-describedby="candidates-toggle-help"
-                />
-                <label htmlFor="show-candidates">Afișează anomaliile candidate</label>
-              </div>
-              <p id="candidates-toggle-help" className="help-text">
-                Dezactivează ca să vezi ortofotoplanul fără marcaje și să compari cu sliderul.
-              </p>
 
               {/* Rezumatul e singurul lucru prezent permanent in arborele de accesibilitate:
                   tabelul e intr-un <dialog> inchis. Deci trebuie sa stea singur in picioare. */}
@@ -1898,6 +1905,17 @@ export default function App() {
                 </>
               )}
             </section>
+            ) : (
+              // Fila Anomalii ramane MEREU montata, chiar goala: o fila care apare si dispare
+              // ar strica ordinea filelor si numaratoarea din navigarea cu sageti.
+              <section className="side-panel" aria-labelledby="anomalies-heading">
+                <h2 id="anomalies-heading">Anomalii detectate</h2>
+                <p className="help-text">
+                  Încă nu există rezultate. Alegeți două zboruri în fila Comparație și apăsați
+                  Compară zborurile.
+                </p>
+              </section>
+            )
           )}
 
         </div>
@@ -1911,6 +1929,64 @@ export default function App() {
               // canal l-ar anunta de trei ori.
               <p className="map-stale-chip" aria-hidden="true">
                 Se calculează comparația…
+              </p>
+            )}
+          </div>
+
+          {/* Banda de comenzi de vizualizare, ancorata pe harta. Ce controleaza AFISAREA
+              hartii sta pe harta; ce controleaza fluxul de lucru sta in panoul lateral.
+              Inainte erau amestecate, iar cu file una ar fi trimis la cealalta fara ca ele sa
+              fie vreodata vizibile impreuna. */}
+          <div className="view-strip" role="group" aria-label="Comenzi de vizualizare">
+            <div className="strip-row">
+              <label htmlFor="opacity-slider">Amestec</label>
+              <input
+                id="opacity-slider"
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={opacity}
+                onChange={handleSliderChange}
+                className="opacity-slider"
+                aria-valuetext={mixText(opacity)}
+              />
+              <span className="slider-value" aria-hidden="true">
+                {Math.round(opacity * 100)}%
+              </span>
+            </div>
+
+            <div className="strip-row strip-layers">
+              <span className="strip-toggle">
+                <input
+                  type="checkbox"
+                  id="show-candidates"
+                  checked={showCandidates}
+                  onChange={(e) => toggleCandidates(e.target.checked)}
+                />
+                <label htmlFor="show-candidates">Anomalii candidate</label>
+              </span>
+
+              {truthInfo && (
+                <span className="strip-toggle">
+                  <input
+                    type="checkbox"
+                    id="show-known-changes"
+                    checked={showKnown}
+                    onChange={(e) => toggleKnownChanges(e.target.checked)}
+                  />
+                  <label htmlFor="show-known-changes">Schimbări cunoscute</label>
+                </span>
+              )}
+            </div>
+
+            {/* Legenda sta langa ce explica, nu intr-un panou pe care poate sa nu-l ai
+                deschis. Vizibila, nu ascunsa: pentru cine vede, e singura cheie a codificarii
+                intrerupt-vs-continuu. */}
+            {showKnown && truthInfo && (
+              <p className="strip-legend">
+                Schimbări cunoscute: contur galben întrerupt. Anomalii candidate: contur roșu
+                continuu.
               </p>
             )}
           </div>
