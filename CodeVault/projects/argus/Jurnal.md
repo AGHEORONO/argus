@@ -8,6 +8,68 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-30 — refactorul de layout, verificat; suita de interfață, în CI
+
+**Făcut**: refactorul necomis (bară de activități în stil VS Code, panou unic persistent,
+bandă de comenzi mutată pe hartă) a fost verificat mecanic, iar verificarea a devenit
+permanentă. 45 de teste Playwright în `app/frontend/tests-e2e/`, rulate în CI la fiecare
+push.
+
+### De ce era nevoie
+
+Toate scripturile de verificare de până acum (24/24 tastatură, 15/15 reflow, T-08) erau de
+unică folosință și nu mai existau în repo. CI-ul verifica doar că frontendul *compilează* —
+iar un tablist rupt, un focus pierdut sau o bandă care acoperă harta compilează perfect.
+
+### Ce s-a găsit
+
+- **Casetele din banda de vizualizare erau 16×16 px**, sub minimul de 24×24 al WCAG 2.2
+  SC 2.5.8 (Target Size, Minimum). Găsit de axe-core, nu de citit codul. Reparat la 24×24;
+  eticheta alăturată comută și ea caseta, deci ținta reală era mai mare, dar SC-ul măsoară
+  elementul și nu ne putem scuti singuri pe baza a ceva ce unealta nu vede.
+- Restul refactorului a rezistat: roving tabindex corect (un singur tab stop), activare
+  automată la săgeți cu focusul rămas pe filă, `aria-controls` valid pe toate cele trei
+  file, reflow curat la 320/480/900/1280, T-08 confirmat cu **0 cereri** la drag.
+
+### Trei teste care treceau din motivul greșit
+
+Notat fiindcă e același tipar ca defectele din 26 august, de data asta în testele mele:
+
+1. Plasa de siguranță din simulator era înregistrată **ultima**, iar în Playwright ultima
+   rută înregistrată câștigă — deci înghițea toate răspunsurile și aplicația rula fără date.
+   Nouă teste treceau peste un ecran gol.
+2. `context.route` nu bate `page.route`, deci două suprascrieri de test nu se aplicau
+   niciodată. Unul dintre testele afectate **trecea**, verificând scenariul opus celui scris.
+3. Eticheta canvasului: `toContain('Hartă ortofotoplan')` trece și pe `Map.Title` pe care
+   MapLibre îl pune singur la inițializare — deci ar fi trecut și dacă eticheta noastră n-ar
+   fi fost aplicată vreodată. Schimbat pe conținutul detaliat.
+
+### Puntea spre backendul real
+
+Testele de interfață simulează backendul (`tests-e2e/fixtures.json`), ca să ruleze în
+secunde și să poată forța stări greu de atins. Riscul e ca simularea să se depărteze de API
+fără să observe nimeni. `tests/test_api_contract.py` cere backendului adevărat să producă
+exact cheile din fixtures și pică dacă vreuna dispare.
+
+**Check output**:
+```
+pytest tests/            -> 79 passed, 1 skipped   (74 + 5 contract)
+playwright tests-e2e/    -> 45 passed
+npm run build            -> ✓ built
+```
+
+**Blocaje**: niciunul.
+
+**De reținut, spus cinstit**: axe-core prinde vreo treime din problemele WCAG, și niciuna
+dintre cele care contează cel mai mult aici. Cele 45 de teste verifică afirmațiile scrise în
+comentariile codului; nu înlocuiesc o trecere cu un cititor de ecran real, care nu s-a făcut
+niciodată pe proiectul ăsta.
+
+**Urmează**: nemodificat — răspunsurile de la coordonator. Faza 2 rămâne blocată de
+[[Intrebari deschise]] Î-05.
+
+---
+
 ## 2026-08-26 — audit cu ochi proaspeți, patru defecte de fond, timeline
 
 **Făcut**: 23 de commituri. Rezumatul e mai lung decât de obicei fiindcă ziua a schimbat ce credeam despre proiect.

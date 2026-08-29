@@ -44,6 +44,17 @@ Confirmat de utilizator: Obsidian Git e instalat și funcțional pe mașina prin
 - **Faza 1** — ~~ingestie și validare~~ **implementată** (T-09, T-10, T-11, 2026-08-25): validare de blur, GPS EXIF și suprapunere, expusă prin API și prin panou de frontend operabil integral de la tastatură. **Rămâne**: n-a rulat niciodată pe poze reale de dronă — EXIF-ul e scris de noi. Vezi [[Decizii]] D-016.
 - **Faza 2** — fotogrammetrie cu OpenDroneMap (Docker, ore de procesare, licență AGPL de clarificat — vezi [[Intrebari deschise]] Î-05).
 
+## 8b. ~~Nu exista niciun test de frontend~~ — 45 de teste in CI (2026-08-30)
+
+Toate scripturile de verificare de pana acum erau de unica folosinta si nu mai existau in
+repo, deci munca de accesibilitate era nereproductibila si CI-ul verifica doar ca frontendul
+compileaza. Acum: `app/frontend/tests-e2e/` (tastatura, focus, dialog, reflow, echivalentul
+textual al hartii, axe-core) plus `tests/test_api_contract.py` care tine backendul simulat
+lipit de cel real. Rulate la fiecare push. Vezi [[Jurnal]] 2026-08-30.
+
+**Ramane netestat**: nicio trecere cu un cititor de ecran real (NVDA/VoiceOver). Axe prinde
+vreo treime din problemele WCAG si niciuna dintre cele de ordine si sens.
+
 ## 8. Harta n-are echivalent textual (nou, 2026-08-25)
 
 Ieșit la revizuirea de accesibilitate a Fazei 1, dar e o problemă mai veche și mai mare decât panoul de ingestie: `<div id="map">` n-are nume accesibil, n-are rol și n-are nicio alternativă textuală. Poziția geografică a fiecărei anomalii — adică rezultatul central al aplicației — e disponibilă exclusiv vizual. Lista de candidați dă rang și scor, niciodată locația.

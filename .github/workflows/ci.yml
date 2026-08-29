@@ -68,3 +68,23 @@ jobs:
         # Prinde erorile de sintaxă JSX înainte de deploy. S-a întâmplat de două ori într-o
         # zi ca un comentariu pus greșit într-un map() să spargă build-ul.
         run: npm run build
+
+      - name: Instalează Chromium pentru Playwright
+        working-directory: app/frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Teste de interfață (tastatură, reflow, axe)
+        working-directory: app/frontend
+        # Build-ul verde nu spune nimic despre un tablist rupt, un focus pierdut sau o
+        # bandă care acoperă harta la 320px. Până acum toată verificarea de accesibilitate
+        # se făcea cu scripturi de unică folosință, care nu mai există.
+        # `playwright.config.js` construiește și servește singur aplicația.
+        run: npm run test:e2e
+
+      - name: Păstrează raportul când testele pică
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raport-playwright
+          path: app/frontend/playwright-report/
+          retention-days: 7

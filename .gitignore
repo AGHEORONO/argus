@@ -14,6 +14,16 @@ __pycache__/
 node_modules/
 dist/
 
+# Playwright — rapoarte, urme si capturi de la rulari esuate
+app/frontend/test-results/
+app/frontend/playwright-report/
+app/frontend/blob-report/
+
+# Configurari de la alte unelte de agent, per-masina
+.cursor/
+.kimi-code/
+opencode.json
+
 # Obsidian — per-machine UI state, causes conflicts between PC and laptop
 CodeVault/.obsidian/workspace.json
 CodeVault/.obsidian/workspace-mobile.json

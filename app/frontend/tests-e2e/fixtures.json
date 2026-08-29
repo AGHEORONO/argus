@@ -1,0 +1,18 @@
+{
+  "_comentariu": "Datele pe care le servesc testele de interfata in locul backendului. Formele de aici sunt verificate impotriva backendului adevarat de tests/test_api_contract.py, care pica daca o cheie folosita in frontend dispare din API.",
+  "site": "sit_demo",
+  "captures": [
+    { "id": "c1", "captured_on": "2026-03-14", "label": "zbor de referință" },
+    { "id": "c2", "captured_on": "2026-05-02", "label": "după ploi" },
+    { "id": "c3", "captured_on": "2026-08-11", "label": null }
+  ],
+  "comparisons": [
+    { "base_capture": "c1", "target_capture": "c2", "has_result": true },
+    { "base_capture": "c1", "target_capture": "c3", "has_result": false }
+  ],
+  "flights": [
+    { "id": "test", "status": "done", "has_truth": true, "bounds": [-78.434, 0.011, -78.4275, 0.0158] }
+  ],
+  "anomaly_properties": { "rank": 1, "anomaly_score": 0.9412 },
+  "truth_properties": { "zone": 1, "label": "structură demolată" }
+}
