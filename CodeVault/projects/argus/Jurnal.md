@@ -8,6 +8,78 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-30 (2) — aplicație Windows de sine stătătoare
+
+**Făcut**: același program, împachetat altfel. Backendul pornește pe un port ales la rulare,
+servește și frontendul din aceeași origine, iar interfața se deschide într-o fereastră proprie
+peste WebView2 în loc de un tab de browser. Deploy-ul web pe Render + Vercel rămâne neatins:
+aceeași bază de cod, comutată dintr-un mod de build.
+
+WebView2 e Chromium, deci NVDA, navigarea de la tastatură și contrastul se comportă identic
+cu ce verifică suita din `tests-e2e/`. A fost și motivul alegerii — o interfață nativă
+rescrisă ar fi aruncat toată munca aia.
+
+### Ce a trebuit schimbat
+
+- **Căile de date erau relative la directorul curent** (14 locuri, 4 fișiere). Merge cât timp
+  aplicația pornește din rădăcina repo-ului; instalată în `Program Files` n-ar fi putut scrie
+  deloc. Un singur `app/backend/paths.py` decide acum: `ARGUS_DATA_DIR` explicit, altfel
+  `%LOCALAPPDATA%\Argus` când e împachetat, altfel `data/` ca înainte — deci dezvoltarea și
+  testele nu se schimbă cu nimic.
+- **Frontendul e servit de backend** (`StaticFiles` montat ULTIMUL, ca rutele de API să
+  câștige). Ruta de sănătate s-a mutat pe `/api`, iar rădăcina o primește doar când nu există
+  frontend livrat — adică pe Render.
+- **`API_BASE` folosește acum `??`, nu `||`.** Șirul gol e o valoare validă și înseamnă
+  „aceeași origine"; cu `||` ar fi căzut pe adresa absolută și aplicația ar fi cerut de la alt
+  port decât cel pe care rulează.
+- Modul de build `desktop` fixează asta în `vite.config.js`, nu într-un `.env.desktop`:
+  `.gitignore` ignoră `.env*`, iar în PowerShell `$env:X = ""` **șterge** variabila în loc s-o
+  golească. Pe niciuna din căile alea valoarea n-ar fi ajuns pe altă mașină.
+
+### Trei defecte găsite doar pentru că pachetul a fost chiar rulat
+
+PyInstaller construiește ușor. Ce cade e rularea, iar simptomul e identic de fiecare dată: un
+program care pur și simplu nu pornește.
+
+1. **`sys.stdout` este `None` într-o aplicație `console=False`**, iar configurația implicită
+   de logging a lui uvicorn instalează un formatter colorat care apelează `sys.stdout.isatty()`.
+   `AttributeError` la pornire. Rezolvat cu `log_config=None`.
+2. **O excepție într-un fir nu se propagă nicăieri.** Serverul murea în tăcere, iar aplicația
+   raporta „backendul nu a răspuns la timp" — simptomul, nu cauza.
+3. **`MessageBoxW` e modal**: fără nimeni care să apese OK, blochează procesul la nesfârșit.
+   Fiecare rulare eșuată costa exact trei minute.
+
+Fără jurnal pe fișier, niciunul dintre ele n-ar fi fost vizibil: într-o aplicație fără consolă,
+un traceback nu ajunge nicăieri.
+
+### Cum se verifică, mecanic
+
+`tests/test_desktop_bundle.py` pornește **executabilul construit** și îi cere un **tile** — nu
+pagina de start. O pagină servită dovedește doar că uvicorn pornește; un tile trece prin
+`rasterio`, DLL-urile de GDAL și `proj.db`, adică exact partea care lipsește dintr-un pachet
+prost făcut și care nu se vede la build. Se sare automat când pachetul nu e construit, deci
+CI-ul nu se schimbă.
+
+Fereastra a fost verificată separat: proces viu, titlu „Argus Custode", handle de fereastră
+real, backend gata în ~2 secunde.
+
+**Check output**:
+```
+pytest tests/            -> 89 passed, 1 skipped   (79 + 4 launcher + 4 pachet + 2 contract)
+playwright tests-e2e/    -> 48 passed
+pachet                   -> 302 MB, pornire ~2s
+```
+
+**De reținut, spus cinstit**: executabilul e **nesemnat**, deci prima rulare arată un
+avertisment SmartScreen și unele antivirusuri pot reclama. Semnarea costă bani și nu s-a
+făcut. Iar `npx playwright test` reconstruiește `dist/` în modul web — după el, o pornire din
+sursă servește bundle-ul cu adresa absolută. `build-desktop.ps1` reconstruiește corect și
+refuză să continue dacă adresa absolută apare în bundle.
+
+**Urmează**: nemodificat — răspunsurile de la coordonator.
+
+---
+
 ## 2026-08-30 — refactorul de layout, verificat; suita de interfață, în CI
 
 **Făcut**: refactorul necomis (bară de activități în stil VS Code, panou unic persistent,

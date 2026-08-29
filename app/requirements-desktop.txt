@@ -1,0 +1,6 @@
+# Numai pentru aplicatia de desktop. Separat de app/requirements.txt cu buna stiinta:
+# imaginea Docker de pe Render n-are nevoie de niciunul, iar pythonnet nici macar nu se
+# instaleaza pe linux-ul de acolo.
+-r requirements.txt
+pywebview==6.2.1
+pyinstaller==6.22.2
