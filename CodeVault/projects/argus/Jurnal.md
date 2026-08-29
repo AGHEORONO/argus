@@ -51,10 +51,30 @@ secunde și să poată forța stări greu de atins. Riscul e ca simularea să se
 fără să observe nimeni. `tests/test_api_contract.py` cere backendului adevărat să producă
 exact cheile din fixtures și pică dacă vreuna dispare.
 
+### Controalele hărții, acoperite de bandă
+
+Măsurat, nu bănuit din captură: grupul de zoom (398–427 × 803–890) era acoperit pe două
+treimi de bandă (400–1428 × 822–888), iar atribuirea (1344–1430 × 866–890) era acoperită
+**integral**. Erau jos-stânga și jos-dreapta pentru că "niciun panou nu acoperă zona aia" —
+adevărat până când banda a fost mutată pe hartă.
+
+Mutate sus-dreapta, unde marginea e liberă acum că harta e propriul ei dreptunghi. Alegerea
+nu depinde de înălțimea benzii, care crește și scade cu legenda — orice degajare fixă jos ar
+fi fost greșită la una din stări.
+
+Prima încercare a stricat altceva: `new AttributionControl({ compact: true })` lăsa controlul
+gol și `display: none`. Cauza, găsită în sursa bibliotecii: `constructor(e = Jr)`, iar `Jr`
+conține și `customAttribution` cu creditul MapLibre — un obiect de opțiuni pasat îl
+**înlocuiește** integral, nu îl completează. Fără argument, merge.
+
+Testul T-08 nou scris a picat o dată în paralel și a trecut de 4 ori serial: fereastra fixă
+de 1500 ms nu ajungea când patru workeri concurează pe CPU și tile-urile încă veneau.
+Înlocuită cu așteptarea liniștii reale pe rețea. Un test instabil e mai rău decât niciunul.
+
 **Check output**:
 ```
 pytest tests/            -> 79 passed, 1 skipped   (74 + 5 contract)
-playwright tests-e2e/    -> 45 passed
+playwright tests-e2e/    -> 48 passed (de doua ori, in paralel)
 npm run build            -> ✓ built
 ```
 

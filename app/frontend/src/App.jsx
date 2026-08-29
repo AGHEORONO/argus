@@ -474,6 +474,9 @@ export default function App() {
       zoom: DEFAULT_ZOOM,
       maxZoom: 20,
       minZoom: 10,
+      // Atribuirea se adauga manual mai jos, ca sa nu ramana in coltul din dreapta-jos,
+      // unde banda de comenzi o acopera complet.
+      attributionControl: false,
       // MapLibre isi eticheteaza singur canvasul si controalele, in engleza. Pagina e
       // lang="ro", deci o voce romaneasca le-ar pronunta neinteligibil.
       locale: {
@@ -486,9 +489,21 @@ export default function App() {
       },
     });
 
-    // 'top-left' le aseza sub .top-header si sub .ingest-panel — vizibil ramanea un fir de
-    // cativa pixeli. Jos-stanga e singura zona pe care niciun panou n-o acopera.
-    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'bottom-left');
+    // Sus-dreapta, nu jos-stanga. Istoricul: 'top-left' le aseza sub .top-header si sub
+    // .ingest-panel, asa ca s-a ales jos-stanga fiindca "niciun panou n-o acopera" — adevarat
+    // atunci. Banda de comenzi a invalidat premisa: acoperea doua treimi din grupul de zoom
+    // (398-427 x 803-890 sub banda 400-1428 x 822-888) si INTEGRAL atribuirea hartii
+    // (1344-1430 x 866-890), care e o cerinta de licentiere a datelor, nu un ornament.
+    //
+    // Marginea de sus a vizorului e libera acum, fiindca harta e propriul ei dreptunghi si
+    // panourile stau in afara lui. Alegerea nu depinde de inaltimea benzii, care creste si
+    // scade cu legenda — orice degajare fixa jos ar fi fost gresita la una din stari.
+    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
+    // FARA argument. `AttributionControl` are `constructor(e = Jr)`, iar Jr contine si
+    // `customAttribution` cu creditul MapLibre — un obiect de optiuni pasat il INLOCUIESTE
+    // in intregime, nu il completeaza. Cu `{ compact: true }` controlul ramanea gol si
+    // `display: none`, adica exact atributia pe care o mutam ca sa fie vizibila.
+    map.addControl(new maplibregl.AttributionControl(), 'top-right');
 
     map.on('load', () => {
       // 1. Before Raster Layer

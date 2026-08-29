@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openApp } from './fixtures.js';
+import { openApp, asteaptaLiniste } from './fixtures.js';
 
 /**
  * Banda de comenzi de vizualizare, mutată din panoul lateral pe hartă.
@@ -97,7 +97,8 @@ test('T-08: drag-ul sliderului nu cere nimic din rețea', async ({ page }) => {
   // permanentă. Un slider care recere tile-uri la fiecare pixel îngenunchează backendul.
   const slider = page.getByRole('slider', { name: 'Amestec' });
   await slider.waitFor();
-  await page.waitForTimeout(1500); // se așază încărcarea inițială de tile-uri
+  // Nu un cronometru fix: se așteaptă ca încărcarea inițială de tile-uri să tacă de la sine.
+  await asteaptaLiniste(page);
 
   const cereri = [];
   page.on('request', (r) => cereri.push(r.url()));
@@ -121,4 +122,60 @@ test('comenzile de hartă nu s-au dublat în panoul lateral după mutare', async
   // ar exista două slidere cu același nume și una ar fi mereu desincronizată.
   await expect(page.getByRole('slider', { name: 'Amestec' })).toHaveCount(1);
   await expect(page.getByRole('checkbox', { name: 'Anomalii candidate' })).toHaveCount(1);
+});
+
+test('banda nu acoperă niciun control al hărții', async ({ page }) => {
+  // Regresia reparată pe 2026-08-30. Controalele erau jos-stânga și jos-dreapta fiindcă
+  // "niciun panou nu acoperă zona aia" — adevărat până când banda a fost mutată pe hartă.
+  // Acopereau două treimi din grupul de zoom și INTEGRAL atribuirea, care e o cerință de
+  // licențiere a datelor.
+  //
+  // Testul e pe geometrie, nu pe poziția aleasă: dacă cineva mută banda sau controalele
+  // altundeva și se suprapun din nou, pică, indiferent de colțul folosit.
+  const bandaBox = await banda(page).boundingBox();
+  const controale = page.locator('.maplibregl-ctrl');
+  const n = await controale.count();
+  expect(n, 'harta ar trebui să aibă controale').toBeGreaterThan(0);
+
+  for (let i = 0; i < n; i++) {
+    const c = controale.nth(i);
+    if (!(await c.isVisible())) continue;
+    const box = await c.boundingBox();
+    const seSuprapun = box.x < bandaBox.x + bandaBox.width
+      && box.x + box.width > bandaBox.x
+      && box.y < bandaBox.y + bandaBox.height
+      && box.y + box.height > bandaBox.y;
+    const cls = await c.getAttribute('class');
+    expect(seSuprapun, `controlul "${cls}" se suprapune cu banda`).toBe(false);
+  }
+});
+
+test('butoanele de zoom chiar primesc click-ul, nu ceva de deasupra', async ({ page }) => {
+  // Geometria singură nu ajunge: un element transparent deasupra ar trece testul de
+  // suprapunere și tot ar fura click-ul. Se întreabă browserul cine e în vârf.
+  for (const nume of ['Mărește harta', 'Micșorează harta']) {
+    const buton = page.getByRole('button', { name: nume });
+    await expect(buton).toBeVisible();
+    const box = await buton.boundingBox();
+    const deasupra = await page.evaluate(
+      ([x, y]) => {
+        const el = document.elementFromPoint(x, y);
+        return el ? !!el.closest('.maplibregl-ctrl') : false;
+      },
+      [box.x + box.width / 2, box.y + box.height / 2],
+    );
+    expect(deasupra, `"${nume}" e acoperit de altceva`).toBe(true);
+  }
+});
+
+test('atribuirea hărții rămâne vizibilă', async ({ page }) => {
+  // Cerință de licențiere a datelor. Era ascunsă complet sub bandă.
+  const atribuire = page.locator('.maplibregl-ctrl-attrib');
+  await expect(atribuire).toBeVisible();
+  const box = await atribuire.boundingBox();
+  const deasupra = await page.evaluate(
+    ([x, y]) => !!document.elementFromPoint(x, y)?.closest('.maplibregl-ctrl-attrib'),
+    [box.x + box.width / 2, box.y + box.height / 2],
+  );
+  expect(deasupra, 'atribuirea e acoperită de alt element').toBe(true);
 });

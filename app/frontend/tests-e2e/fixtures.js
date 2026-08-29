@@ -103,3 +103,24 @@ export async function goToTab(page, nume) {
   await page.getByRole('tab', { name: nume }).click();
   await page.getByRole('tab', { name: nume, selected: true }).waitFor();
 }
+
+/**
+ * Așteaptă ca rețeaua să tacă efectiv, în loc de un cronometru fix.
+ *
+ * Varianta cu `waitForTimeout(1500)` a picat în CI la a doua rulare: cu mai mulți workeri
+ * pe același CPU, tile-urile încă veneau după o secundă și jumătate și erau puse pe seama
+ * drag-ului. Un test instabil e mai rău decât niciunul — învață oamenii să ignore roșul.
+ */
+export async function asteaptaLiniste(page, liniste = 800, plafon = 15000) {
+  let ultima = Date.now();
+  const marcheaza = () => { ultima = Date.now(); };
+  page.on('request', marcheaza);
+  const start = Date.now();
+  try {
+    while (Date.now() - ultima < liniste && Date.now() - start < plafon) {
+      await page.waitForTimeout(100);
+    }
+  } finally {
+    page.off('request', marcheaza);
+  }
+}
