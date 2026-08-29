@@ -56,8 +56,8 @@ EMPTY_TILE_PNG = encode_png(np.zeros((4, 256, 256), dtype=np.uint8))
 def resolve_layer_path(layer: str) -> Optional[str]:
     """Find the COG or GeoTIFF path for a given layer name."""
     candidates = [
-        f"data/reference/{layer}.cog.tif",
-        f"data/reference/{layer}.tif",
+        data_path("reference", f"{layer}.cog.tif"),
+        data_path("reference", f"{layer}.tif"),
         # Forma "<flight_id>/<before|after>", folosita de ruta pe zbor. Varianta veche
         # "<flight_id>/<flight_id>.cog.tif" nu era produsa de nimic — uploadul scrie
         # before.tif/after.tif — deci tile-urile pentru zboruri urcate nu functionau.

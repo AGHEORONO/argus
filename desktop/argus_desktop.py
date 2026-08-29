@@ -89,14 +89,25 @@ def porneste_serverul(port: int):
     return server, fir
 
 
-def asteapta_serverul(port: int, secunde: float = 90.0) -> bool:
+def asteapta_serverul(port: int, secunde: float = 240.0, server=None) -> bool:
     """Asteapta un raspuns real, nu doar un port deschis.
 
-    Prima pornire poate dura: daca lipsesc datele demo, backendul le pregateste inainte sa
-    raspunda. Se interogheaza /api, care nu depinde de existenta frontendului.
+    Rabdator si scurt in acelasi timp, doua cerinte care par contradictorii:
+
+    - Prima pornire pe un calculator gol descarca un ortofotoplan de 16MB, il redimensioneaza,
+      construieste doua COG-uri si ruleaza detectia inainte sa raspunda. Masurat: ~10s pe o
+      conexiune buna, dar pe una lenta poate trece binisor de un minut. De aici cele 4 minute.
+    - Cand serverul a murit deja, nu are rost sa asteptam nimic: firul lui pune `should_exit`
+      dupa ce jurnalizeaza exceptia, deci se iese imediat. Fara asta, o eroare de pornire ar
+      arata utilizatorului patru minute de nimic.
+
+    Se interogheaza /api, care nu depinde de existenta frontendului.
     """
     limita = time.monotonic() + secunde
     while time.monotonic() < limita:
+        if server is not None and server.should_exit:
+            logging.error("serverul s-a oprit inainte sa raspunda")
+            return False
         try:
             with urllib.request.urlopen(f"http://{GAZDA}:{port}/api", timeout=3) as r:
                 if r.status == 200:
@@ -143,7 +154,7 @@ def _main(jurnal: str) -> int:
     url = f"http://{GAZDA}:{port}/"
     server, _ = porneste_serverul(port)
 
-    if not asteapta_serverul(port):
+    if not asteapta_serverul(port, server=server):
         logging.error("backendul nu a raspuns la timp")
         _arata_eroare(
             "Argus nu a putut porni.\n\n"

@@ -63,11 +63,26 @@ CI-ul nu se schimbă.
 Fereastra a fost verificată separat: proces viu, titlu „Argus Custode", handle de fereastră
 real, backend gata în ~2 secunde.
 
+### Al patrulea defect, gasit doar pentru ca a fost pornit pe un calculator gol
+
+Prima pornire cu `%LOCALAPPDATA%` gol scria in `data/reference` **relativ la directorul
+curent**, in timp ce restul aplicatiei citea din radacina reala. Doua locuri diferite, zero
+erori. Instalata in `Program Files`, primul ar fi fost si nescriibil.
+
+Cauza: refactorul radacinii de date a cautat forma `os.path.join("data", ...)` si a ratat
+sapte locuri scrise ca literale — `REF_DIR = "data/reference"` si
+`f"data/reference/{layer}.tif"`. Nu se vedea in niciun test, fiindca in dezvoltare directorul
+curent **este** radacina repo-ului, deci ambele cai duceau in acelasi loc.
+
+`test_fara_cai_de_date_relative_in_backend` scaneaza acum textul din `app/backend/*.py` si
+pica pe orice cale relativa, cu fisier si linie. Verificata prin reintroducerea defectului:
+prinde exact linia.
+
 **Check output**:
 ```
-pytest tests/            -> 89 passed, 1 skipped   (79 + 4 launcher + 4 pachet + 2 contract)
+pytest tests/            -> 90 passed, 1 skipped   (79 + 4 launcher + 4 pachet + 3 contract)
 playwright tests-e2e/    -> 48 passed
-pachet                   -> 302 MB, pornire ~2s
+pachet                   -> 302 MB, pornire ~2s; prima pornire pe gol 13-33s
 ```
 
 **De reținut, spus cinstit**: executabilul e **nesemnat**, deci prima rulare arată un

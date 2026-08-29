@@ -234,3 +234,47 @@ def test_radacina_de_date_se_poate_muta_din_mediu(tmp_path, monkeypatch):
         assert paths.data_path("sites", "x").startswith(os.path.abspath(str(tmp_path)))
     finally:
         paths.data_root.cache_clear()
+
+
+def test_fara_cai_de_date_relative_in_backend():
+    """Nicio cale de date nu are voie să fie relativă la directorul curent.
+
+    Refactorul care a centralizat rădăcina de date a ratat șapte locuri, fiindcă erau scrise
+    ca literale (`"data/reference"`, `f"data/reference/{layer}.tif"`) și nu ca
+    `os.path.join("data", ...)`, singura formă căutată atunci. Efectul nu era o eroare: seed-ul
+    scria lângă directorul curent iar restul aplicației citea din rădăcina reală, deci două
+    locuri diferite și niciun mesaj. Într-o aplicație instalată în Program Files, primul ar fi
+    fost și nescriibil.
+
+    Garda e pe text cu bună știință: e singura care prinde forma pe care omul o scrie data
+    viitoare, indiferent cum arată.
+    """
+    import glob
+
+    # Verificare pe subsiruri, nu pe expresii regulate: tiparele contin ghilimele si
+    # backslash-uri, iar o expresie scrisa gresit ar trece tacut in loc sa raporteze.
+    tipare = [
+        'os.path.join("data"',
+        "os.path.join('data'",
+        '"data/',
+        "'data/",
+        '"data' + chr(92),
+        "'data" + chr(92),
+    ]
+
+    gasite = []
+    for cale in glob.glob(os.path.join("app", "backend", "*.py")):
+        if os.path.basename(cale) == "paths.py":
+            continue  # singurul loc care are voie sa stie cum arata radacina
+        with open(cale, encoding="utf-8") as fh:
+            for nr, linie in enumerate(fh, 1):
+                curat = linie.strip()
+                if curat.startswith("#"):
+                    continue
+                if any(t in linie for t in tipare):
+                    gasite.append(f"{cale}:{nr}: {curat}")
+
+    assert not gasite, (
+        "cale de date relativa, folositi data_path():" + chr(10) + "  "
+        + (chr(10) + "  ").join(gasite)
+    )

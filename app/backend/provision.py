@@ -34,7 +34,11 @@ OAM_DOWNLOAD_URL = (
     "113fb2f2-d8dc-425a-97c2-20050a580192.tif"
 )
 
-REF_DIR = "data/reference"
+# Prin data_path, nu literal: la refactorul radacinii de date locul asta a fost ratat,
+# fiindca `"data/reference"` nu se potriveste cu forma `os.path.join("data", ...)` cautata
+# atunci. Rezultatul: seed-ul scria langa directorul curent, iar restul aplicatiei citea din
+# radacina reala — doua locuri diferite, fara nicio eroare. Vezi `test_fara_cai_de_date_relative`.
+REF_DIR = data_path("reference")
 BEFORE_PATH = os.path.join(REF_DIR, "before.tif")
 AFTER_PATH = os.path.join(REF_DIR, "after.tif")
 BEFORE_COG_PATH = os.path.join(REF_DIR, "before.cog.tif")
