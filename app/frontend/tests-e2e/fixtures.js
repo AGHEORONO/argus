@@ -105,22 +105,24 @@ export async function goToTab(page, nume) {
 }
 
 /**
- * Așteaptă ca rețeaua să tacă efectiv, în loc de un cronometru fix.
+ * Așteaptă ca harta să fie efectiv nemișcată: `idle` se emite când nu mai e nicio tranziție
+ * de cameră, toate tile-urile s-au încărcat și fade-urile s-au terminat.
  *
- * Varianta cu `waitForTimeout(1500)` a picat în CI la a doua rulare: cu mai mulți workeri
- * pe același CPU, tile-urile încă veneau după o secundă și jumătate și erau puse pe seama
- * drag-ului. Un test instabil e mai rău decât niciunul — învață oamenii să ignore roșul.
+ * Varianta anterioară aștepta ca rețeaua să tacă. A picat de două ori, o dată în CI, fiindcă
+ * animația inițială de cameră are pauze mai lungi decât fereastra de liniște: măsurarea
+ * pornea în mijlocul ei și punea pe seama drag-ului 50 de tile-uri de zoom 18 cerute de
+ * cameră. Semnalul corect vine de la hartă, nu de la rețea.
  */
-export async function asteaptaLiniste(page, liniste = 800, plafon = 15000) {
-  let ultima = Date.now();
-  const marcheaza = () => { ultima = Date.now(); };
-  page.on('request', marcheaza);
-  const start = Date.now();
-  try {
-    while (Date.now() - ultima < liniste && Date.now() - start < plafon) {
-      await page.waitForTimeout(100);
-    }
-  } finally {
-    page.off('request', marcheaza);
-  }
+export async function asteaptaHartaNemiscata(page, plafon = 30000) {
+  await page.waitForFunction(() => !!window.__argusMap, null, { timeout: plafon });
+  await page.evaluate(
+    (ms) => new Promise((gata) => {
+      const m = window.__argusMap;
+      const t = setTimeout(gata, ms);
+      const termina = () => { clearTimeout(t); gata(); };
+      if (m.loaded() && !m.isMoving() && !m.isZooming() && !m.isRotating()) return termina();
+      m.once('idle', termina);
+    }),
+    plafon,
+  );
 }

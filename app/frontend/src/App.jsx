@@ -641,6 +641,11 @@ export default function App() {
       });
 
       mapRef.current = map;
+      // Expusa pentru teste. Fara instanta hartii, testul T-08 nu poate astepta evenimentul
+      // `idle` si trebuie sa ghiceasca din tacerea retelei — iar animatia initiala de camera
+      // are pauze suficient de lungi cat sa para terminata. A produs doua esecuri instabile,
+      // unul in CI, ambele acuzand sliderul de 50 de tile-uri de zoom 18 cerute de camera.
+      window.__argusMap = map;
       // Start fetching detection data
       checkAndFetchDetection();
     });

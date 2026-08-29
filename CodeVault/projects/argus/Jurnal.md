@@ -67,9 +67,19 @@ gol și `display: none`. Cauza, găsită în sursa bibliotecii: `constructor(e =
 conține și `customAttribution` cu creditul MapLibre — un obiect de opțiuni pasat îl
 **înlocuiește** integral, nu îl completează. Fără argument, merge.
 
-Testul T-08 nou scris a picat o dată în paralel și a trecut de 4 ori serial: fereastra fixă
-de 1500 ms nu ajungea când patru workeri concurează pe CPU și tile-urile încă veneau.
-Înlocuită cu așteptarea liniștii reale pe rețea. Un test instabil e mai rău decât niciunul.
+Testul T-08 nou scris a picat de trei ori, în trei feluri, și abia a treia diagnoză a fost
+cea corectă — notat fiindcă primele două erau plauzibile și greșite:
+
+1. „Fereastra fixă de 1500 ms nu ajunge sub încărcare." Înlocuită cu așteptarea liniștii pe
+   rețea. A picat în CI prin **timeout**, nu prin aserțiune.
+2. „Bugetul de 30 s e prea mic." Ridicat la 90 s. A picat din nou, 4 din 6 rulări.
+3. Cauza reală, citită din URL-urile cerute: tile-uri la **zoom 18**, deși harta pornește la
+   16,5. Nu sliderul le cerea, ci **animația inițială de cameră**, ale cărei pauze sunt mai
+   lungi decât fereastra de liniște — măsurarea pornea în mijlocul ei. Semnalul corect e
+   evenimentul `idle` al hărții, nu tăcerea rețelei. 6 din 6 sub patru workeri după.
+
+Instanța hărții e expusă acum pe `window.__argusMap`, fiindcă altfel testul nu poate afla
+când s-a oprit camera și e obligat să ghicească. Un test instabil e mai rău decât niciunul.
 
 **Check output**:
 ```

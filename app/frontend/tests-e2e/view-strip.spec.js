@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openApp, asteaptaLiniste } from './fixtures.js';
+import { openApp, asteaptaHartaNemiscata } from './fixtures.js';
 
 /**
  * Banda de comenzi de vizualizare, mutată din panoul lateral pe hartă.
@@ -93,12 +93,18 @@ test('fără adevăr de referință, comutatorul de schimbări cunoscute nu exis
 });
 
 test('T-08: drag-ul sliderului nu cere nimic din rețea', async ({ page }) => {
+  // Buget propriu. Testul asteapta intai ca incarcarea de tile-uri sa taca (pana la 12s pe
+  // un runner incarcat), apoi face 41 de miscari de mouse, apoi mai asteapta. Cu limita
+  // implicita de 30s a picat in CI prin timeout, nu prin aserțiune — adica exact felul de
+  // rosu care nu spune nimic despre aplicatie.
+  test.setTimeout(90_000);
   // Regresia verificată manual pe 2026-08-25 cu un script de unică folosință. Aici devine
   // permanentă. Un slider care recere tile-uri la fiecare pixel îngenunchează backendul.
   const slider = page.getByRole('slider', { name: 'Amestec' });
   await slider.waitFor();
-  // Nu un cronometru fix: se așteaptă ca încărcarea inițială de tile-uri să tacă de la sine.
-  await asteaptaLiniste(page);
+  // Harta trebuie să fie nemișcată înainte de măsurare, altfel tile-urile cerute de animația
+  // inițială de cameră ajung să fie puse pe seama drag-ului.
+  await asteaptaHartaNemiscata(page);
 
   const cereri = [];
   page.on('request', (r) => cereri.push(r.url()));
