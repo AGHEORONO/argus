@@ -13,6 +13,7 @@ from rasterio.transform import from_bounds as from_bounds_transform
 from rasterio.vrt import WarpedVRT
 from rasterio.warp import transform_bounds
 from fastapi import APIRouter, Response
+from app.backend.paths import data_path
 
 router = APIRouter()
 tms = morecantile.tms.get("WebMercatorQuad")
@@ -60,12 +61,12 @@ def resolve_layer_path(layer: str) -> Optional[str]:
         # Forma "<flight_id>/<before|after>", folosita de ruta pe zbor. Varianta veche
         # "<flight_id>/<flight_id>.cog.tif" nu era produsa de nimic — uploadul scrie
         # before.tif/after.tif — deci tile-urile pentru zboruri urcate nu functionau.
-        os.path.join("data", "flights", f"{layer}.cog.tif"),
-        os.path.join("data", "flights", f"{layer}.tif"),
+        data_path("flights", f"{layer}.cog.tif"),
+        data_path("flights", f"{layer}.tif"),
         # Forma "<site_id>/<capture_id>", folosita de timeline. Fiecare captura are un
         # singur raster, deci numele fisierului e fix.
-        os.path.join("data", "sites", layer, "raster.cog.tif"),
-        os.path.join("data", "sites", layer, "raster.tif"),
+        data_path("sites", layer, "raster.cog.tif"),
+        data_path("sites", layer, "raster.tif"),
     ]
     for path in candidates:
         if os.path.exists(path):

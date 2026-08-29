@@ -196,3 +196,41 @@ def test_fixtures_nu_pretinde_chei_pe_care_nu_le_foloseste_nimeni(fixtures):
         f"secțiuni noi în fixtures.json fără punte spre backend: {sorted(netestate)}. "
         "Adaugă un test aici sau scoate-le."
     )
+
+
+def test_radacina_serveste_aplicatia_cand_frontendul_e_livrat(client):
+    """Aplicația de desktop rulează totul dintr-o singură origine.
+
+    Fără asta, pagina ar cere de la alt port decât cel de pe care a fost servită, ceea ce
+    reintroduce CORS într-un program care rulează pe calculatorul utilizatorului.
+    """
+    from app.backend.paths import frontend_dir
+
+    if not frontend_dir():
+        pytest.skip("frontendul nu e construit (app/frontend/dist lipsește)")
+
+    radacina = client.get("/")
+    assert radacina.status_code == 200
+    assert "text/html" in radacina.headers["content-type"]
+
+    # Rutele de API rămân ale API-ului: montarea pe "/" e ultima, deci nu le înghite.
+    assert client.get("/api").json()["status"] == "running"
+    assert client.get("/flights").status_code == 200
+    assert client.get("/assets/fisier-inexistent.js").status_code == 404
+
+
+def test_radacina_de_date_se_poate_muta_din_mediu(tmp_path, monkeypatch):
+    """În aplicația instalată, directorul programului e read-only.
+
+    `data_root()` e memoizat, deci testul golește cache-ul în loc să se bazeze pe ordinea
+    testelor — altfel ar trece sau ar pica după cine a importat modulul primul.
+    """
+    from app.backend import paths
+
+    paths.data_root.cache_clear()
+    monkeypatch.setenv("ARGUS_DATA_DIR", str(tmp_path / "altundeva"))
+    try:
+        assert paths.data_root() == os.path.abspath(str(tmp_path / "altundeva"))
+        assert paths.data_path("sites", "x").startswith(os.path.abspath(str(tmp_path)))
+    finally:
+        paths.data_root.cache_clear()

@@ -24,6 +24,11 @@ app/frontend/blob-report/
 .kimi-code/
 opencode.json
 
+# Aplicatia de desktop — artefacte de build, ~300MB
+dist-desktop/
+build-desktop/
+Argus-Custode-windows.zip
+
 # Obsidian — per-machine UI state, causes conflicts between PC and laptop
 CodeVault/.obsidian/workspace.json
 CodeVault/.obsidian/workspace-mobile.json

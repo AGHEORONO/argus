@@ -14,6 +14,7 @@ from rio_cogeo.profiles import cog_profiles
 from shapely.geometry import Polygon, mapping
 
 from app.backend.detect import detect_changes
+from app.backend.paths import data_path
 
 # Copiere in benzi de randuri, nu tot rasterul deodata - Render free tier are 512MB RAM,
 # iar before.tif intreg (~9000x13000x3) ocupa singur ~335MB per array in memorie.
@@ -283,7 +284,7 @@ def seed_demo_site(get_db_func):
     from datetime import date
 
     site_id = "sit_demo"
-    site_root = os.path.join("data", "sites", site_id)
+    site_root = data_path("sites", site_id)
     plan = [
         ("2026-03-10", "ridicare inițială", BEFORE_PATH),
         ("2026-05-18", "primăvară", BEFORE_PATH),

@@ -4,7 +4,10 @@ import { bounds as anomalyBounds, summarise, zoneName } from './geo';
 import Timeline from './Timeline';
 import { dataLunga } from './timeline-layout';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000';
+// `??`, nu `||`: sirul GOL e o valoare valida si inseamna "aceeasi origine". Aplicatia de
+// desktop e servita chiar de backend, deci cererile pleaca relative si nu exista CORS. Cu
+// `||`, sirul gol ar fi cazut pe adresa absoluta si aplicatia ar fi cerut de la alt port.
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000';
 const DEFAULT_CENTER = [-78.43072, 0.01334];
 const DEFAULT_ZOOM = 16.5;
 

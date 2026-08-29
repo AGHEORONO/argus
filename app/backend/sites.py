@@ -22,8 +22,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 
 from app.backend.detect import detect_changes
+from app.backend.paths import data_path
 
-DATA_DIR = os.path.join("data", "sites")
+DATA_DIR = data_path("sites")
 
 
 def init_site_tables(conn: sqlite3.Connection) -> None:

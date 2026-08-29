@@ -10,15 +10,17 @@ from typing import Any, Dict, List, Optional
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.backend.detect import detect_changes
+from app.backend.paths import data_path, ensure_data_root, frontend_dir
 from app.backend.ingest import validate_flight_photos
 from app.backend.sites import build_router as build_sites_router, init_site_tables
 from app.backend.tiles import router as tiles_router
 
 # Testele importau get_db si scriau in baza de date de productie, lasand un zbor fantoma
 # vizibil in API-ul public si, fiindca lista e ordonata dupa updated_at, chiar pe primul loc.
-DB_PATH = os.environ.get("ARGUS_DB_PATH", "data/argus.db")
+DB_PATH = os.environ.get("ARGUS_DB_PATH") or data_path("argus.db")
 
 
 def flight_dir(flight_id: str, *parts: str) -> str:
@@ -33,7 +35,7 @@ def flight_dir(flight_id: str, *parts: str) -> str:
         or os.path.basename(flight_id.replace("\\", "/")) != flight_id
     ):
         raise HTTPException(status_code=400, detail="Invalid flight id")
-    return os.path.join("data", "flights", flight_id, *parts)
+    return data_path("flights", flight_id, *parts)
 
 
 def get_db() -> sqlite3.Connection:
@@ -88,6 +90,7 @@ def init_db():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    ensure_data_root()
     init_db()
     # In CI seed-ul ar descarca ortofotoplanul de referinta si ar construi COG-uri de ~11MB
     # la fiecare rulare, adica o dependenta de retea si minute irosite pentru date de care
@@ -165,9 +168,13 @@ def _site_helpers():
 
 
 
-@app.get("/")
+@app.get("/api")
 def read_root():
-    """Health check endpoint."""
+    """Health check endpoint.
+
+    Canonic pe /api. Radacina o primeste doar cand nu exista un frontend livrat impreuna cu
+    backendul — vezi montarea de la finalul fisierului.
+    """
     return {"name": "Argus Custode API", "status": "running"}
 
 
@@ -292,9 +299,9 @@ def raster_bounds_wgs84(flight_id: str):
     import rasterio
 
     candidates = (
-        [os.path.join("data", "reference", "before.cog.tif")]
+        [data_path("reference", "before.cog.tif")]
         if flight_id == "test"
-        else [os.path.join("data", "flights", flight_id, "before.cog.tif")]
+        else [data_path("flights", flight_id, "before.cog.tif")]
     )
     for path in candidates:
         if not os.path.exists(path):
@@ -329,7 +336,7 @@ def get_flight_truth(flight_id: str):
     changed here".
     """
     path = (
-        os.path.join("data", "reference", "truth.geojson")
+        data_path("reference", "truth.geojson")
         if flight_id == "test"
         else flight_dir(flight_id, "truth.geojson")
     )
@@ -380,12 +387,12 @@ def list_flights():
             # Anuntat in lista ca frontendul sa nu ceara un fisier despre care stie ca
             # lipseste: un 404 e o stare asteptata, dar tot polueaza consola browserului.
             "has_truth": os.path.exists(
-                os.path.join("data", "reference", "truth.geojson")
+                data_path("reference", "truth.geojson")
                 if fid == "test"
-                else os.path.join("data", "flights", fid, "truth.geojson")
+                else data_path("flights", fid, "truth.geojson")
             ),
             "has_tiles": all(
-                os.path.exists(os.path.join("data", "flights", fid, f"{layer}.cog.tif"))
+                os.path.exists(data_path("flights", fid, f"{layer}.cog.tif"))
                 for layer in ("before", "after")
             ) or fid == "test",
         })
@@ -704,3 +711,20 @@ def get_flight_result(flight_id: str):
 # Montat la final: routerul primeste helperi (save_upload, limitele) definiti mai jos in
 # acest fisier, deci montarea nu poate preceda definitiile lor.
 app.include_router(build_sites_router(get_db, _site_helpers()))
+
+
+# Frontendul, cand e livrat impreuna cu backendul (aplicatia de desktop).
+#
+# Montarea vine ULTIMA cu buna stiinta: Starlette potriveste rutele in ordinea inregistrarii,
+# deci /flights, /sites, /tiles si /api castiga, iar mount-ul pe "/" e doar plasa pentru
+# fisiere statice. Invers, ar inghiti tot API-ul.
+#
+# Same-origin inseamna si ca CORS nu mai are ce sa faca aici: pagina si API-ul au aceeasi
+# origine, deci nu exista cerere cross-origin de permis sau de reflectat.
+_frontend_dir = frontend_dir()
+if _frontend_dir:
+    app.mount("/", StaticFiles(directory=_frontend_dir, html=True), name="frontend")
+else:
+    # Deploy web: frontendul e servit separat, iar radacina ramane raspunsul de sanatate pe
+    # care il interogheaza Render si start-local.ps1.
+    app.get("/")(read_root)
