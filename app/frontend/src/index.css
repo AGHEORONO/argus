@@ -241,19 +241,16 @@ body, html, #root {
   overflow: visible;
 }
 
-/* Aliniat cu .panel-header h2 din celelalte panouri: 13/600, nu 15/700. Fila Ingestie era
-   singura care isi scria titlul altfel, si se vedea. Linia de sub el devine hairline, ca
-   toate celelalte separatoare. */
+/* Doar geometria. Marimea, greutatea si versalele vin din regula unificata de mai jos
+   (`.panel-header h2, .ingest-panel > h2, .sheet-header h2`), deci a le repeta aici ar fi cod
+   mort care pare sa faca ceva.
+   Ce lipsea cu adevarat: linia de sub titlu era `rgba(255,255,255,0.1)` in loc de hairline,
+   iar titlul nu se intindea pe toata latimea panoului ca in celelalte file — de aici marginile
+   negative, care anuleaza padding-ul panoului doar pentru antet. */
 .ingest-panel h2 {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-main);
   border-bottom: 1px solid var(--border-hairline);
-  padding-bottom: 10px;
   margin: -12px -14px 4px;
-  padding-left: 14px;
-  padding-right: 14px;
-  padding-top: 12px;
+  padding: 12px 14px 10px;
 }
 
 .sub-heading {

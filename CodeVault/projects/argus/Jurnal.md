@@ -15,9 +15,17 @@ e în două zile, deci prioritatea s-a mutat pe ce se vede și pe ce se poate ar
 
 ### Fila Ingestie
 
-Era singura rămasă în stilul vechi, și se vedea imediat lângă celelalte: titlu de 15/700 în loc
-de 13/600, etichete de formular obișnuite în loc de etichete de instrument, o zonă de drop cu
-contur **dublu** de 2 px într-o interfață în care nicio muchie nu trece de 1 px.
+Era singura rămasă în stilul vechi: etichete de formular obișnuite în loc de etichete de
+instrument, și o zonă de drop cu contur **dublu** de 2 px într-o interfață în care nicio muchie
+nu trece de 1 px.
+
+*Corecție, notată fiindcă tocmai asta caută proiectul*: prima variantă a acestei intrări spunea
+că și titlul era altfel dimensionat, iar regula scrisă îi punea 13/600. Fals — exista deja o
+regulă mai jos în fișier care unifică toate cele trei antete de panou, deci mărimea era de mult
+aliniată, iar declarațiile mele erau cod mort peste care se scria oricum. Găsit fiindcă
+producția raporta 11 px acolo unde comentariul promitea 13. Ce lipsea de fapt: linia de sub
+titlu era `rgba(255,255,255,0.1)` în loc de hairline, iar titlul nu se întindea pe toată
+lățimea panoului.
 
 Aliniată: același antet ca celelalte panouri, etichete mono versale spațiate, zona de drop cu
 hairline și o iconiță desenată. Sub panou rămânea o placă de `#1E2A3E` — culoarea de hairline
