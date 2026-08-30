@@ -8,6 +8,65 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-30 (3) — identitate vizuală: marcă, icon, și fonturile care nu erau acolo
+
+**Făcut**: logo, icon de aplicație, și un pas de rafinare a interfeței. Machetele sunt pe un
+canvas Claude Design, iar totul e aplicat în cod.
+
+### Marca
+
+Două cadre decalate, cu suprapunerea plină: zborul de referință, zborul comparat, și zona
+comparabilă. Marca **este** operația aplicației, nu o metaforă lipită peste ea — și e singura
+dintre cele trei direcții desenate care rămâne lizibilă la 16 px.
+
+Respinse, cu motiv: **Apertura** (duce direct la nume — Argus, gigantul cu o sută de ochi —
+dar ochiul și diafragma sunt cele mai folosite forme din software-ul de securitate și foto,
+iar lamelele dispar sub 24 px); **Reticul** (limbajul topografiei, dar grila interioară se
+pierde complet sub 32 px și rămâne un pătrat cu un punct).
+
+Iconul are **două desene, nu unul scalat**: peste 24 px varianta subțire, sub 24 px cea plină.
+Conturul de 1,5 al mărcii ajunge la 0,75 px la 16 px și se spală. `.ico`-ul are șase
+dimensiuni, fiecare desenată la rezoluția ei.
+
+### Ce s-a găsit pe drum
+
+**Niciun caracter din aplicație nu era în fontul intenționat.** CSS-ul cerea `Fira Sans` și
+`Fira Code`, dar `index.html` încărca Inter și JetBrains Mono. Nici Fira nu era încărcat, nici
+Inter nu era cerut — totul cădea pe Segoe UI. Defect vechi, invizibil fiindcă rezultatul arăta
+plauzibil.
+
+Reparat cu **IBM Plex Sans + IBM Plex Mono**, împachetate local prin `@fontsource`. Local, nu
+de la Google Fonts, fiindcă aplicația de desktop trebuie să meargă și fără internet: de pe un
+CDN ar lipsi exact atunci. Din același motiv a fost mutat local și CSS-ul MapLibre, care se
+lua de pe unpkg — fără el, harta ar fi rămas complet nestilizată offline.
+
+Rezultat secundar, măsurat: pagina nu mai cere **nicio** resursă externă.
+
+### Rafinări
+
+Marca desenată în loc de litera „A" într-un pătrat colorat. Iconițele filelor erau făcute din
+bordurile unui `<span>` gol — un pătrat, un cerc și un romb rotit; acum sunt desenate pe grila
+de 24, deci se citesc ca un set și spun ce face fila. Pastila de stare de 20 px se bătea cap în
+cap cu o interfață în care nicio rază nu trece de 3 px: a devenit cip dreptunghiular cu punct
+pătrat. Titlul e versale spațiate, subtitlul e mono — eticheta de pe un instrument, nu subtitlu
+de site.
+
+**Nicio culoare nu s-a atins.** Erau deja măsurate.
+
+**Check output**:
+```
+playwright tests-e2e/  -> 48 passed (axe pe toate filele + la 320px)
+pytest tests/          -> 90 passed, 1 skipped
+pachet                 -> construit cu icon, 4/4 teste pe executabil, zip 114,8 MB
+resurse externe        -> 0 (erau 3: Google Fonts x2, unpkg)
+```
+
+**Blocaje**: niciunul.
+
+**Urmează**: nemodificat — răspunsurile de la coordonator.
+
+---
+
 ## 2026-08-30 (2) — aplicație Windows de sine stătătoare
 
 **Făcut**: același program, împachetat altfel. Backendul pornește pe un port ales la rulare,

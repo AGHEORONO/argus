@@ -1,0 +1,30 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "Identitate" },
+    { "id": "page-2", "name": "Direcții respinse" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1440, "h": 900, "title": "Interfața rafinată", "page": "page-1" },
+    { "file": "Logo.dc.html", "x": 1560, "y": 0, "w": 940, "h": 660, "title": "Logo și wordmark", "page": "page-1" },
+    { "file": "Icon.dc.html", "x": 1560, "y": 780, "w": 940, "h": 620, "title": "Icon de aplicație", "page": "page-1" },
+    { "file": "DirectiaApertura.dc.html", "x": 0, "y": 0, "w": 460, "h": 540, "title": "A · Apertura", "page": "page-2" },
+    { "file": "DirectiaReticul.dc.html", "x": 560, "y": 0, "w": 460, "h": 540, "title": "C · Reticul", "page": "page-2" }
+  ],
+  "annotations": [
+    {
+      "id": "nota-directie",
+      "x": 1560,
+      "y": -190,
+      "w": 940,
+      "text": "Direcția aleasă: B — două cadre decalate, cu suprapunerea plină.\n\nA fost preferată fiindcă marca ESTE operația aplicației (compari două epoci, te uiți la ce se suprapune), nu o metaforă lipită peste ea. Și e singura dintre cele trei care rămâne lizibilă la 16 px.\n\nCelelalte două direcții, cu argumentele lor pro și contra, sunt pe pagina „Direcții respinse”."
+    },
+    {
+      "id": "nota-font",
+      "x": 0,
+      "y": -190,
+      "w": 1440,
+      "text": "Fontul e schimbat deliberat pe IBM Plex Sans + IBM Plex Mono.\n\nMotivul nu e estetic: CSS-ul cerea 'Fira Sans'/'Fira Code', dar index.html încărca Inter și JetBrains Mono — deci nicio literă din aplicație nu era în fontul intenționat, totul cădea pe Segoe UI. Trebuia oricum reparat, deci alegerea s-a făcut conștient.\n\nCulorile rămân exact cele măsurate. Nimic din paletă nu s-a atins."
+    }
+  ],
+  "launch": { "view": "canvas", "page": "page-1" }
+}

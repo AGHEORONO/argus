@@ -859,6 +859,26 @@ export default function App() {
     return () => ro.disconnect();
   }, []);
 
+  // Iconitele erau facute din bordurile unui <span> gol — un patrat, un cerc si un romb.
+  // Desenate ca SVG pe grila de 24, cu aceeasi grosime de contur, se citesc ca un set si
+  // spun ce face fila: incarcare, doua cadre suprapuse, semnal de atentionare.
+  const ICOANE = {
+    ingestie: <path d="M12 15V3.5M7.5 8 12 3.5 16.5 8M3.5 15v5h17v-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="square" />,
+    comparatie: (
+      <>
+        <rect x="3.5" y="3.5" width="12" height="12" stroke="currentColor" strokeWidth="1.6" />
+        <rect x="8.5" y="8.5" width="12" height="12" stroke="currentColor" strokeWidth="1.6" />
+      </>
+    ),
+    anomalii: (
+      <>
+        <path d="M12 3.5 21.5 20H2.5L12 3.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+        <path d="M12 9.5v4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="square" />
+        <rect x="11.1" y="16" width="1.8" height="1.8" fill="currentColor" />
+      </>
+    ),
+  };
+
   const TABS = [
     { id: 'ingestie', label: 'Ingestie' },
     { id: 'comparatie', label: 'Comparație' },
@@ -1373,7 +1393,16 @@ export default function App() {
       {/* Top Header */}
       <header className="top-header">
         <div className="brand-section">
-          <div className="logo-badge">A</div>
+          {/* Doua cadre decalate cu suprapunerea plina: zborul de referinta, cel comparat,
+              si zona comparabila. Marca e operatia aplicatiei, nu o metafora peste ea.
+              aria-hidden fiindca titlul de alaturi spune deja numele — altfel se aude de doua ori. */}
+          <div className="logo-badge" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <rect x="4.75" y="4.75" width="16.5" height="16.5" stroke="#64748B" strokeWidth="1.5" />
+              <rect x="11" y="11" width="10" height="10" fill="#38BDF8" />
+              <rect x="10.75" y="10.75" width="16.5" height="16.5" stroke="#38BDF8" strokeWidth="1.5" />
+            </svg>
+          </div>
           <div className="title-group">
             <h1>Argus Custode</h1>
             <p>Detecție Anomalii Ortofotoplan Dronă</p>
@@ -1466,7 +1495,9 @@ export default function App() {
               ref={(el) => { tabRefs.current[t.id] = el; }}
               onClick={() => setActiveTab(t.id)}
             >
-              <span className="activity-icon" aria-hidden="true" />
+              <svg className="activity-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                {ICOANE[t.id]}
+              </svg>
               <span className="activity-label">{t.label}</span>
             </button>
           ))}

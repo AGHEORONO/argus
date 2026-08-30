@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #020617; }
+    a { color: #38BDF8; } a:hover { color: #7DD3FC; }
+    .cap { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7C8BA1; }
+    .wm { font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #F1F5F9; }
+  </style>
+</helmet>
+
+<div style="width: 940px; height: 660px; padding: 40px; box-sizing: border-box; background: #020617; font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif; color: #F1F5F9; display: flex; flex-direction: column; gap: 28px;">
+
+  <div style="display: flex; flex-direction: column; gap: 5px;">
+    <div class="cap">Identitate · marcă și wordmark</div>
+    <div style="font-size: 20px; font-weight: 600; letter-spacing: -0.01em;">Argus Custode</div>
+    <p style="margin: 0; max-width: 600px; font-size: 12.5px; line-height: 1.55; color: #94A3B8;">
+      Două cadre decalate — zborul de referință și cel comparat — cu suprapunerea marcată în accent.
+      Marca este exact operația pe care o face aplicația, nu o metaforă adăugată peste ea.
+    </p>
+  </div>
+
+  <!-- Lockup principal -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 24px; background: #0B1220; border: 1px solid #1E2A3E; border-radius: 3px;">
+      <div class="cap">Lockup orizontal · principal</div>
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <svg width="44" height="44" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect x="4.75" y="4.75" width="16.5" height="16.5" stroke="#64748B" stroke-width="1.5"/>
+          <rect x="11" y="11" width="10" height="10" fill="{{accent}}"/>
+          <rect x="10.75" y="10.75" width="16.5" height="16.5" stroke="{{accent}}" stroke-width="1.5"/>
+        </svg>
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <div class="wm" style="font-size: 19px; line-height: 1;">Argus Custode</div>
+          <div class="cap" style="line-height: 1;">Detecție schimbări · ortofotoplan</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 24px; background: #0B1220; border: 1px solid #1E2A3E; border-radius: 3px;">
+      <div class="cap">Lockup stivuit</div>
+      <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px;">
+        <svg width="40" height="40" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect x="4.75" y="4.75" width="16.5" height="16.5" stroke="#64748B" stroke-width="1.5"/>
+          <rect x="11" y="11" width="10" height="10" fill="{{accent}}"/>
+          <rect x="10.75" y="10.75" width="16.5" height="16.5" stroke="{{accent}}" stroke-width="1.5"/>
+        </svg>
+        <div class="wm" style="font-size: 17px; line-height: 1;">Argus Custode</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Variante -->
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px;">
+
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; background: #0B1220; border: 1px solid #1E2A3E; border-radius: 3px;">
+      <div class="cap">Marca singură</div>
+      <svg width="52" height="52" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect x="4.75" y="4.75" width="16.5" height="16.5" stroke="#64748B" stroke-width="1.5"/>
+        <rect x="11" y="11" width="10" height="10" fill="{{accent}}"/>
+        <rect x="10.75" y="10.75" width="16.5" height="16.5" stroke="{{accent}}" stroke-width="1.5"/>
+      </svg>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; background: #0B1220; border: 1px solid #1E2A3E; border-radius: 3px;">
+      <div class="cap">Monocrom</div>
+      <svg width="52" height="52" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect x="4.75" y="4.75" width="16.5" height="16.5" stroke="#F1F5F9" stroke-width="1.5"/>
+        <rect x="11" y="11" width="10" height="10" fill="#F1F5F9"/>
+        <rect x="10.75" y="10.75" width="16.5" height="16.5" stroke="#F1F5F9" stroke-width="1.5"/>
+      </svg>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 3px;">
+      <div class="cap" style="color: #64748B;">Pe fundal deschis</div>
+      <svg width="52" height="52" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect x="4.75" y="4.75" width="16.5" height="16.5" stroke="#64748B" stroke-width="1.5"/>
+        <rect x="11" y="11" width="10" height="10" fill="#0369A1"/>
+        <rect x="10.75" y="10.75" width="16.5" height="16.5" stroke="#0369A1" stroke-width="1.5"/>
+      </svg>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; background: #0B1220; border: 1px solid #1E2A3E; border-radius: 3px;">
+      <div class="cap">Spațiu de protecție</div>
+      <div style="position: relative; width: 52px; height: 52px;">
+        <div style="position: absolute; inset: -9px; border: 1px dashed #334155;"></div>
+        <svg width="52" height="52" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect x="4.75" y="4.75" width="16.5" height="16.5" stroke="#64748B" stroke-width="1.5"/>
+          <rect x="11" y="11" width="10" height="10" fill="{{accent}}"/>
+          <rect x="10.75" y="10.75" width="16.5" height="16.5" stroke="{{accent}}" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <div class="cap" style="font-size: 9px;">= 1/4 din latura mărcii</div>
+    </div>
+  </div>
+
+  <!-- Construcție -->
+  <div style="display: flex; gap: 20px; padding: 24px; background: #0B1220; border: 1px solid #1E2A3E; border-radius: 3px;">
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div class="cap">Construcție · grilă 32</div>
+      <svg width="140" height="140" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <g stroke="#1E2A3E" stroke-width="0.25">
+          <path d="M4 0v32M11 0v32M16 0v32M21 0v32M28 0v32M0 4h32M0 11h32M0 16h32M0 21h32M0 28h32"/>
+        </g>
+        <rect x="4.75" y="4.75" width="16.5" height="16.5" stroke="#64748B" stroke-width="1.5"/>
+        <rect x="11" y="11" width="10" height="10" fill="{{accent}}"/>
+        <rect x="10.75" y="10.75" width="16.5" height="16.5" stroke="{{accent}}" stroke-width="1.5"/>
+      </svg>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px; justify-content: center; max-width: 420px;">
+      <div style="display: flex; gap: 10px; font-size: 12px; line-height: 1.5; color: #94A3B8;">
+        <span style="color: #64748B; font-family: 'IBM Plex Mono', ui-monospace, monospace;">01</span>
+        <span>Cadrul de referință, 16,5 × 16,5, contur <span style="color:#F1F5F9">#64748B</span> — trecutul, retras.</span>
+      </div>
+      <div style="display: flex; gap: 10px; font-size: 12px; line-height: 1.5; color: #94A3B8;">
+        <span style="color: #64748B; font-family: 'IBM Plex Mono', ui-monospace, monospace;">02</span>
+        <span>Cadrul comparat, decalat cu 6,25 pe ambele axe, contur în accent — prezentul.</span>
+      </div>
+      <div style="display: flex; gap: 10px; font-size: 12px; line-height: 1.5; color: #94A3B8;">
+        <span style="color: #64748B; font-family: 'IBM Plex Mono', ui-monospace, monospace;">03</span>
+        <span>Suprapunerea, 10 × 10, plină — zona comparabilă, singurul element solid.</span>
+      </div>
+      <div style="display: flex; gap: 10px; font-size: 12px; line-height: 1.5; color: #94A3B8;">
+        <span style="color: #64748B; font-family: 'IBM Plex Mono', ui-monospace, monospace;">04</span>
+        <span>Grosime constantă 1,5 la orice dimensiune ≥ 24 px; sub 24 px se folosește varianta plină din foaia de icon.</span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#38BDF8","options":["#38BDF8","#34D399","#FBBF24","#F87171"],"section":"Culoare"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#38BDF8' };
+  }
+}
+</script>
+</body>
+</html>

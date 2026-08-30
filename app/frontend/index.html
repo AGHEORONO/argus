@@ -4,10 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Argus Custode — Hartă detecție schimbări</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.1.1/dist/maplibre-gl.css" />
+    <!-- SVG pentru browserele moderne, .ico ca rezerva. Amandoua servite local: aplicatia de
+         desktop ruleaza si fara internet, iar o iconita de pe un CDN ar lipsi exact atunci. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" href="/icon.ico" sizes="16x16 32x32 48x48" />
+    <meta name="theme-color" content="#020617" />
+    <meta name="description" content="Detecție de schimbări între zboruri de dronă peste același sit." />
   </head>
   <body>
     <div id="root"></div>

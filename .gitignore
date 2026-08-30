@@ -29,6 +29,10 @@ dist-desktop/
 build-desktop/
 Argus-Custode-windows.zip
 
+# Canvasul de design: sursele se pastreaza, pagina asamblata (~2MB de editor) nu
+design/*.html
+!design/*.dc.html
+
 # Obsidian — per-machine UI state, causes conflicts between PC and laptop
 CodeVault/.obsidian/workspace.json
 CodeVault/.obsidian/workspace-mobile.json

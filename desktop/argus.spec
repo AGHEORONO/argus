@@ -71,6 +71,9 @@ exe = EXE(
     strip=False,
     upx=False,          # UPX pe DLL-urile de GDAL le strica, si creste alarmele antivirus
     console=False,      # fara fereastra neagra de consola; erorile merg in jurnal
+    # .ico multi-rezolutie, cu desene separate per dimensiune: sub 24 px conturul de 1,5 al
+    # marcii ajunge sub un pixel si se spala, deci acolo se foloseste varianta plina.
+    icon=os.path.join(RADACINA, "app", "frontend", "public", "icon.ico"),
 )
 
 coll = COLLECT(

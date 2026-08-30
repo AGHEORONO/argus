@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #020617; }
+    a { color: #38BDF8; } a:hover { color: #7DD3FC; }
+    .cap { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7C8BA1; }
+  </style>
+</helmet>
+
+<div style="width: 460px; height: 540px; padding: 32px; box-sizing: border-box; background: #020617; font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif; color: #F1F5F9; display: flex; flex-direction: column; gap: 22px;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <span class="cap">Direcția C</span>
+    <div style="font-size: 18px; font-weight: 600;">Reticul</div>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: center; padding: 30px; background: #0B1220; border: 1px solid #1E2A3E; border-radius: 3px;">
+    <svg width="120" height="120" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <g stroke="#334155" stroke-width="1">
+        <path d="M5 11h22M5 16h22M5 21h22M11 5v22M16 5v22M21 5v22"/>
+      </g>
+      <rect x="5" y="5" width="22" height="22" stroke="#64748B" stroke-width="1.5"/>
+      <rect x="16" y="11" width="5" height="5" fill="#38BDF8"/>
+      <path d="M16 2v3M16 27v3M2 16h3M27 16h3" stroke="#64748B" stroke-width="1.5"/>
+    </svg>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 22px;">
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <rect x="5" y="5" width="22" height="22" stroke="#64748B" stroke-width="1.5"/>
+      <rect x="16" y="11" width="5" height="5" fill="#38BDF8"/>
+    </svg>
+    <svg width="16" height="16" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <rect x="4" y="4" width="24" height="24" stroke="#64748B" stroke-width="3"/>
+      <rect x="16" y="10" width="6" height="6" fill="#38BDF8"/>
+    </svg>
+    <span class="cap">32 · 16</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px; margin-top: auto;">
+    <div style="display: flex; flex-direction: column; gap: 5px;">
+      <span class="cap" style="color: #34D399;">Pentru</span>
+      <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: #94A3B8;">
+        Arată exact rezultatul: o grilă de patch-uri cu o celulă marcată. E limbajul topografiei
+        și al instrumentelor de măsură, deci se așază firesc lângă restul interfeței.
+      </p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 5px;">
+      <span class="cap" style="color: #FBBF24;">Contra</span>
+      <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: #94A3B8;">
+        Grila interioară se pierde complet sub 32 px și rămâne un pătrat cu un punct, care nu mai
+        spune nimic. E și cea mai anonimă dintre cele trei — multe unelte tehnice arată așa.
+      </p>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

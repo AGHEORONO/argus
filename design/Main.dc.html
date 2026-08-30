@@ -1,0 +1,216 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #020617; }
+    a { color: #38BDF8; } a:hover { color: #7DD3FC; }
+    .lbl { font-family: 'IBM Plex Mono', 'Cascadia Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #7C8BA1; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 900px; display: grid; grid-template-rows: 49px 1fr; background: #020617; font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif; color: #F1F5F9; overflow: hidden;">
+
+  <!-- ── Bara de sus ─────────────────────────────────────────────── -->
+  <header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 14px; background: #0B1220; border-bottom: 1px solid #1E2A3E;">
+
+    <div style="display: flex; align-items: center; gap: 11px;">
+      <svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect x="4.75" y="4.75" width="16.5" height="16.5" stroke="#64748B" stroke-width="1.5"/>
+        <rect x="11" y="11" width="10" height="10" fill="#38BDF8"/>
+        <rect x="10.75" y="10.75" width="16.5" height="16.5" stroke="#38BDF8" stroke-width="1.5"/>
+      </svg>
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <div style="font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 1;">Argus Custode</div>
+        <div class="lbl" style="line-height: 1;">Detecție schimbări · ortofotoplan</div>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span class="lbl">Sit</span>
+      <div style="display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; background: #0B1220; border: 1px solid #64748B; border-radius: 3px; font-size: 12px;">
+        <span>Rumicucho — demo</span>
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" stroke="#94A3B8" stroke-width="1.4" stroke-linecap="square"/></svg>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <button style="display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 12px; font-family: inherit; font-size: 12px; font-weight: 500; color: #F1F5F9; background: rgba(255,255,255,0.08); border: 1px solid #64748B; border-radius: 3px; cursor: pointer;">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 6V2h4M14 10v4h-4M14 6V2h-4M2 10v4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="square"/></svg>
+        Ecran complet
+      </button>
+      <button style="display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 12px; font-family: inherit; font-size: 12px; font-weight: 500; color: #F1F5F9; background: rgba(255,255,255,0.08); border: 1px solid #64748B; border-radius: 3px; cursor: pointer;">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2v8M4.5 7 8 10.5 11.5 7M2.5 13.5h11" stroke="currentColor" stroke-width="1.4" stroke-linecap="square"/></svg>
+        GeoJSON
+      </button>
+      <div style="display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.4); border-radius: 2px; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: 0.04em; color: #34D399;">
+        <span style="width: 6px; height: 6px; background: #34D399;"></span>
+        DETECȚIE FINALIZATĂ
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Spațiul de lucru ────────────────────────────────────────── -->
+  <div style="display: grid; grid-template-columns: 88px 300px 1fr; min-height: 0; overflow: hidden;">
+
+    <!-- Bara de activități -->
+    <nav style="display: flex; flex-direction: column; padding-top: 4px; background: #020617; border-right: 1px solid #1E2A3E;">
+
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; width: 88px; height: 64px; color: #94A3B8;">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8M3.5 15v5h17v-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/></svg>
+        <span style="font-size: 11px;">Ingestie</span>
+      </div>
+
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; width: 88px; height: 64px; color: #F1F5F9; font-weight: 600; background: #111C30;">
+        <span style="position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; background: #38BDF8; border-radius: 0 2px 2px 0;"></span>
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="3.5" width="12" height="12" stroke="currentColor" stroke-width="1.6"/><rect x="8.5" y="8.5" width="12" height="12" stroke="currentColor" stroke-width="1.6"/></svg>
+        <span style="font-size: 11px;">Comparație</span>
+      </div>
+
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; width: 88px; height: 64px; color: #94A3B8;">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5 21.5 20H2.5L12 3.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 9.5v4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/><rect x="11.1" y="16" width="1.8" height="1.8" fill="currentColor"/></svg>
+        <span style="font-size: 11px;">Anomalii</span>
+      </div>
+    </nav>
+
+    <!-- Raftul de unelte -->
+    <div style="display: flex; flex-direction: column; background: #0B1220; border-right: 1px solid #1E2A3E; overflow: hidden;">
+
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #1E2A3E;">
+        <span class="lbl" style="color: #94A3B8;">Comparație zboruri</span>
+        <span style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; color: #7C8BA1;">4 capturi</span>
+      </div>
+
+      <div style="padding: 16px; display: flex; flex-direction: column; gap: 18px;">
+
+        <!-- Rigla de timp -->
+        <div style="display: flex; flex-direction: column; gap: 7px;">
+          <div style="position: relative; height: 22px;">
+            <div style="position: absolute; left: 0; right: 0; top: 10px; height: 1px; background: #334155;"></div>
+            <div style="position: absolute; left: 0; top: 5px; width: 1px; height: 11px; background: #64748B;"></div>
+            <div style="position: absolute; left: 31%; top: 3px; width: 9px; height: 9px; border: 1.5px solid #38BDF8; background: #020617;"></div>
+            <div style="position: absolute; left: 62%; top: 5px; width: 1px; height: 11px; background: #64748B;"></div>
+            <div style="position: absolute; right: 0; top: 3px; width: 9px; height: 9px; border: 1.5px solid #38BDF8; background: #38BDF8;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; color: #7C8BA1;">
+            <span>10 mar 2026</span>
+            <span>21 sep 2026</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span class="lbl">Zbor de referință</span>
+          <div style="display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 10px; background: #0B1220; border: 1px solid #64748B; border-radius: 3px; font-size: 12.5px;">
+            <span>10 martie 2026 · ridicare inițială</span>
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" stroke="#94A3B8" stroke-width="1.4" stroke-linecap="square"/></svg>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span class="lbl">Zbor comparat</span>
+          <div style="display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 10px; background: #0B1220; border: 1px solid #38BDF8; border-radius: 3px; font-size: 12.5px;">
+            <span>21 septembrie 2026 · toamnă</span>
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" stroke="#94A3B8" stroke-width="1.4" stroke-linecap="square"/></svg>
+          </div>
+        </div>
+
+        <!-- Rezumatul perechii, ca fisa tehnica -->
+        <div style="display: flex; flex-direction: column; gap: 0; border: 1px solid #1E2A3E; border-radius: 3px; overflow: hidden;">
+          <div style="display: flex; justify-content: space-between; padding: 7px 10px; background: #111C30;">
+            <span class="lbl" style="letter-spacing: 0.1em;">Interval</span>
+            <span style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; color: #F1F5F9;">195 zile</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 7px 10px; border-top: 1px solid #1E2A3E;">
+            <span class="lbl" style="letter-spacing: 0.1em;">Anomalii</span>
+            <span style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; color: #F1F5F9;">50</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 7px 10px; border-top: 1px solid #1E2A3E;">
+            <span class="lbl" style="letter-spacing: 0.1em;">Recall</span>
+            <span style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; color: #34D399;">4 / 4 · rang max 10</span>
+          </div>
+        </div>
+
+        <button style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; font-family: inherit; font-size: 13px; font-weight: 600; color: #FFFFFF; background: #0369A1; border: 1px solid #075985; border-radius: 3px; cursor: pointer;">
+          Recalculează comparația
+        </button>
+
+        <p style="margin: 0; font-size: 11.5px; line-height: 1.5; color: #94A3B8;">
+          Zborul de referință este întotdeauna cel anterior.
+        </p>
+      </div>
+    </div>
+
+    <!-- Vizorul -->
+    <main style="position: relative; overflow: hidden; background: #020617;">
+
+      <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
+        <img src="orto.jpg" alt="Ortofotoplan" style="height: 100%; width: auto; display: block;">
+      </div>
+
+      <!-- Anomalii marcate -->
+      <div style="position: absolute; left: 39%; top: 8%; width: 26px; height: 26px; border: 1.5px solid #F87171; background: rgba(248,113,113,0.16);"></div>
+      <div style="position: absolute; left: 31%; top: 22%; width: 40px; height: 34px; border: 1.5px solid #F87171; background: rgba(248,113,113,0.16);"></div>
+      <div style="position: absolute; left: 55%; top: 27%; width: 22px; height: 40px; border: 1.5px solid #F87171; background: rgba(248,113,113,0.16);"></div>
+      <div style="position: absolute; left: 44%; top: 44%; width: 36px; height: 30px; border: 1.5px solid #F87171; background: rgba(248,113,113,0.16);"></div>
+      <div style="position: absolute; left: 30%; top: 60%; width: 15px; height: 15px; border: 1.5px solid #F87171; background: rgba(248,113,113,0.16);"></div>
+
+      <!-- Comenzi de hartă, sus-dreapta -->
+      <div style="position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; background: #0B1220; border: 1px solid #1E2A3E; border-radius: 3px; overflow: hidden;">
+        <div style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; color: #F1F5F9;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"/></svg>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; color: #F1F5F9; border-top: 1px solid #1E2A3E;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 8h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"/></svg>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; color: #94A3B8; border-top: 1px solid #1E2A3E;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2.5 10.5 8H5.5L8 2.5Z" fill="currentColor"/><path d="M8 13.5V8" stroke="currentColor" stroke-width="1.4" stroke-linecap="square"/></svg>
+        </div>
+      </div>
+
+      <div style="position: absolute; right: 12px; top: 108px; display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: #0B1220; border: 1px solid #1E2A3E; border-radius: 2px; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; color: #94A3B8;">
+        MapLibre
+      </div>
+
+      <!-- Banda de comenzi de vizualizare -->
+      <div style="position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 9px; padding: 10px 14px; background: #0B1220; border: 1px solid #1E2A3E; border-radius: 3px;">
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span class="lbl" style="white-space: nowrap;">Amestec</span>
+          <div style="position: relative; flex: 1; height: 4px; background: #F87171; border-radius: 2px;">
+            <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 50%; background: #38BDF8; border-radius: 2px 0 0 2px;"></div>
+            <div style="position: absolute; left: 50%; top: -6px; width: 4px; height: 16px; margin-left: -2px; background: #F1F5F9; border-radius: 1px;"></div>
+          </div>
+          <span style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; color: #94A3B8; width: 34px; text-align: right;">50%</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 22px;">
+          <div style="display: inline-flex; align-items: center; gap: 8px;">
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #0369A1; border: 1px solid #38BDF8; border-radius: 2px;">
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 7.5 5.8 10.3 11 4.4" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="square"/></svg>
+            </span>
+            <span style="font-size: 12px;">Anomalii candidate</span>
+          </div>
+          <div style="display: inline-flex; align-items: center; gap: 8px;">
+            <span style="display: inline-block; width: 24px; height: 24px; background: #0B1220; border: 1px solid #64748B; border-radius: 2px;"></span>
+            <span style="font-size: 12px; color: #94A3B8;">Schimbări cunoscute</span>
+          </div>
+          <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: auto;">
+            <span style="width: 14px; height: 0; border-top: 1.5px solid #F87171;"></span>
+            <span class="lbl">candidat</span>
+            <span style="width: 14px; height: 0; border-top: 1.5px dashed #FBBF24; margin-left: 8px;"></span>
+            <span class="lbl">cunoscut</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

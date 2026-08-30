@@ -36,8 +36,12 @@
   --radius:    3px;
   --radius-sm: 2px;
 
-  --font-sans: 'Fira Sans', 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'Fira Code', 'Cascadia Mono', ui-monospace, monospace;
+  /* IBM Plex, impachetat local prin @fontsource. Inainte aici scria 'Fira Sans'/'Fira Code',
+     dar index.html incarca Inter si JetBrains Mono — deci nicio litera din aplicatie nu era in
+     fontul intentionat, totul cadea pe Segoe UI. Plex are proportii de font tehnic si o
+     pereche sans/mono construita impreuna, ceea ce conteaza cand cifrele stau langa text. */
+  --font-sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Cascadia Mono', ui-monospace, monospace;
 }
 
 * {
@@ -140,29 +144,42 @@ body, html, #root {
   gap: 12px;
 }
 
+/* Marca desenata, nu litera "A" intr-un patrat colorat: doua cadre decalate cu suprapunerea
+   plina — exact operatia pe care o face aplicatia. Fara fundal si fara bordura, fiindca
+   forma se sustine singura si nu mai adauga inca un dreptunghi intr-o interfata deja plina
+   de ele. */
 .logo-badge {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius);
-  background: var(--accent-strong);
-  border: 1px solid var(--accent);
-  color: white;
-  font-weight: 700;
-  font-size: 18px;
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+
+.logo-badge svg {
+  display: block;
+  width: 30px;
+  height: 30px;
 }
 
 .title-group h1 {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.1;
 }
 
+/* Subtitlul devine eticheta tehnica: mono, versale, spatiat. Se citeste ca marcajul de pe
+   un instrument, nu ca subtitlul unui site. */
 .title-group p {
-  font-size: 12px;
-  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  line-height: 1.4;
 }
 
 .header-status {
@@ -171,14 +188,18 @@ body, html, #root {
   gap: 12px;
 }
 
+/* Pastila de 20px se batea cap in cap cu restul interfetei, unde nicio raza nu trece de 3px.
+   Devine cip dreptunghiular, iar punctul de stare devine patrat — aceeasi geometrie ca marca
+   si ca bara de accent a filei active. Culorile raman neschimbate: erau deja masurate. */
 .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
+  gap: 7px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
   font-weight: 500;
+  letter-spacing: 0.04em;
   font-family: var(--font-mono);
   background: rgba(16, 185, 129, 0.15);
   color: var(--accent-emerald);
@@ -191,11 +212,13 @@ body, html, #root {
   border-color: rgba(245, 158, 11, 0.3);
 }
 
+/* Patrat, nu cerc: singurele forme rotunde ramase in interfata erau punctul asta si pastila
+   din jurul lui. */
 .status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  width: 6px;
+  height: 6px;
   background: currentColor;
+  flex: none;
 }
 
 /* Ingest Panel */
@@ -1607,15 +1630,13 @@ dialog.anomalies-sheet {
   outline-offset: -2px;
 }
 
+/* Desenate acum in JSX, nu improvizate din bordurile unui span gol. Culoarea vine din
+   `currentColor`, deci starea activa/inactiva a filei le coloreaza fara reguli separate. */
 .activity-icon {
-  width: 22px;
-  height: 22px;
-  border: 1.75px solid currentColor;
-  border-radius: 3px;
+  width: 21px;
+  height: 21px;
+  display: block;
 }
-
-.activity-item:nth-child(2) .activity-icon { border-radius: 50%; }
-.activity-item:nth-child(3) .activity-icon { transform: rotate(45deg); }
 
 /* ── Banda de comenzi de vizualizare, pe harta ─────────────────────────────────────── */
 .view-strip {
