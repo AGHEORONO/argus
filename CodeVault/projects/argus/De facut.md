@@ -63,6 +63,16 @@ Cineva care nu vede harta poate parcurge tot fluxul de ingestie, dar nu poate co
 
 ---
 
+## Pentru caietul de practică
+
+Sinteza e scrisă în două note separate, ca să nu trebuiască parcurs [[Jurnal]] de sus în jos:
+
+- [[Prezentare generala]] — ce face aplicația, arhitectura, cifrele, și ce NU s-a făcut
+- [[Probleme si rezolvari]] — fiecare problemă întâlnită, cu simptom, cauză, reparație și ce a
+  rămas de învățat
+
+---
+
 ## Cum pornești aplicația local
 
 `.\start-local.ps1` dintr-un terminal normal. Pornește backendul, construiește frontendul cu `VITE_API_BASE` către el, îl servește pe `http://127.0.0.1:4173`, și oprește tot la `Ctrl+C`.
