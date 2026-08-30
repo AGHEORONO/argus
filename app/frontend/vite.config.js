@@ -14,6 +14,19 @@ export default defineConfig(({ mode }) => ({
   define: mode === 'desktop'
     ? { 'import.meta.env.VITE_API_BASE': JSON.stringify('') }
     : {},
+  build: {
+    rollupOptions: {
+      output: {
+        // MapLibre e ~2/3 din bundle si nu se schimba niciodata cand modificam aplicatia.
+        // Separat, browserul il ia din cache la fiecare deploy urmator, iar interfata poate
+        // fi parsata si desenata fara sa astepte biblioteca de harti.
+        manualChunks: {
+          maplibre: ['maplibre-gl'],
+          react: ['react', 'react-dom'],
+        },
+      },
+    },
+  },
   server: {
     host: '127.0.0.1',
     port: 5173,

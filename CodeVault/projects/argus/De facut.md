@@ -70,6 +70,8 @@ Sinteza e scrisă în două note separate, ca să nu trebuiască parcurs [[Jurna
 - [[Prezentare generala]] — ce face aplicația, arhitectura, cifrele, și ce NU s-a făcut
 - [[Probleme si rezolvari]] — fiecare problemă întâlnită, cu simptom, cauză, reparație și ce a
   rămas de învățat
+- [[Verificare cu cititor de ecran]] — de rulat cu NVDA, 20-30 de minute; e singurul lucru din
+  accesibilitate care n-a fost verificat niciodată
 
 ---
 

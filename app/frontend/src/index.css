@@ -104,7 +104,10 @@ body, html, #root {
      orizontal ascuns; si NU shorthand-ul `overflow`, care ar reseta axa verticala. */
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--border-hairline);
+  /* Fundalul aplicatiei, nu culoarea de hairline: sub panou ramanea o placa de #1E2A3E care
+     citea ca un panou neterminat, nu ca spatiu gol. `gap: 1px` desenează in continuare
+     cusatura dintre panouri, doar ca acum e inchisa la culoare, ca restul muchiilor. */
+  background: var(--bg-app);
   border-right: 1px solid var(--border-hairline);
 }
 
@@ -238,12 +241,19 @@ body, html, #root {
   overflow: visible;
 }
 
+/* Aliniat cu .panel-header h2 din celelalte panouri: 13/600, nu 15/700. Fila Ingestie era
+   singura care isi scria titlul altfel, si se vedea. Linia de sub el devine hairline, ca
+   toate celelalte separatoare. */
 .ingest-panel h2 {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-main);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-hairline);
+  padding-bottom: 10px;
+  margin: -12px -14px 4px;
+  padding-left: 14px;
+  padding-right: 14px;
+  padding-top: 12px;
 }
 
 .sub-heading {
@@ -259,10 +269,15 @@ body, html, #root {
   gap: 6px;
 }
 
+/* Mono, versale, spatiate — acelasi tratament ca etichetele din banda de vizualizare si din
+   antet. `--text-dim` e 5.41:1 pe panou, deci ramane peste prag pentru text mic. */
 .form-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 
 .text-input {
@@ -281,17 +296,26 @@ body, html, #root {
   outline-offset: 2px;
 }
 
+/* 1px, nu 2px: nicio alta muchie din interfata nu e mai groasa de 1px, iar conturul dublu
+   facea zona sa para un element de alt produs. */
 .drop-zone {
-  border: 2px dashed var(--border-control);
+  border: 1px dashed var(--border-control);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 18px 16px;
   text-align: center;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-input);
   transition: border-color 0.15s ease, background 0.15s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
+}
+
+.drop-zone-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--text-dim);
+  display: block;
 }
 
 .drop-zone.drag-over {

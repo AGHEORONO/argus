@@ -36,6 +36,9 @@ design/*.html
 # Obsidian — per-machine UI state, causes conflicts between PC and laptop
 CodeVault/.obsidian/workspace.json
 CodeVault/.obsidian/workspace-mobile.json
+# Si vault-ul din radacina: se rescrie la fiecare deschidere de Obsidian, deci aparea
+# mereu modificat in `git status` fara sa contina nimic de pastrat.
+.obsidian/workspace.json
 CodeVault/.trash/
 
 # OS

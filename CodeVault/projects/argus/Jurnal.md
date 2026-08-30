@@ -8,6 +8,67 @@ type: jurnal
 
 Proiect: [[Argus Custode]]. Intrare nouă sus. Scurt: ce s-a făcut, ce s-a blocat, ce urmează. Fără proză.
 
+## 2026-08-30 (4) — fila Ingestie aliniată, bundle împărțit, scenariu de ascultare
+
+**Făcut**: ultimele lucruri care se puteau face fără răspunsurile coordonatorului. Prezentarea
+e în două zile, deci prioritatea s-a mutat pe ce se vede și pe ce se poate arăta.
+
+### Fila Ingestie
+
+Era singura rămasă în stilul vechi, și se vedea imediat lângă celelalte: titlu de 15/700 în loc
+de 13/600, etichete de formular obișnuite în loc de etichete de instrument, o zonă de drop cu
+contur **dublu** de 2 px într-o interfață în care nicio muchie nu trece de 1 px.
+
+Aliniată: același antet ca celelalte panouri, etichete mono versale spațiate, zona de drop cu
+hairline și o iconiță desenată. Sub panou rămânea o placă de `#1E2A3E` — culoarea de hairline
+folosită ca fundal al raftului pentru a desena cusăturile de 1 px dintre panouri — care citea ca
+un panou neterminat. Fundalul raftului e acum `--bg-app`, iar cusăturile rămân, doar închise la
+culoare.
+
+### Bundle
+
+`maplibre-gl` e două treimi din tot și nu se schimbă niciodată când modificăm aplicația.
+Separat în chunk propriu:
+
+```
+înainte:  index.js  1306 kB
+după:     index.js   234 kB · maplibre.js 1055 kB · react.js 12 kB
+```
+
+Codul aplicației se parsează și se desenează fără să aștepte biblioteca de hărți, iar la
+fiecare deploy următor browserul ia MapLibre din cache.
+
+### Scenariul de ascultare
+
+[[Verificare cu cititor de ecran]] — 26 de pași cu NVDA, grupați pe secțiuni, fiecare cu ce
+trebuie auzit și ce înseamnă eșec. Nu e o listă de bifat: secțiunea C are o întrebare de
+control — *fără să te uiți, poți spune câte anomalii sunt și unde e cea mai importantă?* — iar
+dacă răspunsul e nu, C a picat indiferent ce spun rândurile de deasupra.
+
+Scris fiindcă e singura verificare de accesibilitate care nu se poate automatiza, și fiindcă
+scenariul scris e o poziție onestă de prezentat chiar dacă rularea lui nu mai încape în două
+zile.
+
+### Curățenie
+
+`.obsidian/workspace.json` din rădăcină e scos din urmărire: se rescria la fiecare deschidere de
+Obsidian și apărea mereu modificat, fără să conțină nimic de păstrat.
+
+**Check output**:
+```
+playwright tests-e2e/  -> 48 passed
+pytest tests/          -> 90 passed, 1 skipped
+bundle                 -> 234 kB aplicatie + 1055 kB maplibre (era 1306 kB intr-unul singur)
+```
+
+**Blocaje**: Faza 2 rămâne blocată de [[Intrebari deschise]] Î-05 și de hardware. Nu se mai
+așteaptă răspuns înainte de prezentare.
+
+**Urmează**: de rulat [[Verificare cu cititor de ecran]], dacă apucă. Restul e material de
+prezentat.
+
+---
+
 ## 2026-08-30 (3) — identitate vizuală: marcă, icon, și fonturile care nu erau acolo
 
 **Făcut**: logo, icon de aplicație, și un pas de rafinare a interfeței. Machetele sunt pe un

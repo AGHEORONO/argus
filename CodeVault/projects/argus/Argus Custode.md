@@ -36,6 +36,8 @@ Lista completă a limitelor: [[Prezentare generala]], secțiunea 10.
 
 - [[Prezentare generala]] — ce face, cum e construit, ce funcționează măsurat, ce nu s-a făcut
 - [[Probleme si rezolvari]] — fiecare problemă întâlnită, cu cauza și reparația
+- [[Verificare cu cititor de ecran]] — scenariul de parcurs cu NVDA, singura verificare
+  de accesibilitate care nu se poate automatiza
 
 Restul:
 

@@ -1567,6 +1567,11 @@ export default function App() {
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                 >
+                  {/* Iconita e decorativa: instructiunea de dedesubt spune deja acelasi lucru
+                      in cuvinte, iar un al doilea canal ar dubla anuntul. */}
+                  <svg className="drop-zone-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 15.5V3.5M7.5 8 12 3.5 16.5 8M3.5 15v5.5h17V15" stroke="currentColor" strokeWidth="1.6" strokeLinecap="square" />
+                  </svg>
                   <p id="drop-zone-instructions" className="drop-zone-text">
                     Trageți fotografiile aici sau selectați-le.
                   </p>
